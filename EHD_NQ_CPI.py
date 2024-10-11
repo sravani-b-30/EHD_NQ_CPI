@@ -328,6 +328,12 @@ def load_and_preprocess_data():
 
     # Load price data based on brand
     price_data_df = load_latest_csv_from_s3(price_data_prefix)
+    
+    # Continue processing as per original code
+    merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
+    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
+    merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
+    merged_data_df['Drop Down'] = merged_data_df['Option'].apply(parse_dict_str)
 
     # Brand-specific processing for NAPQUEEN
     if brand_selection == "NAPQUEEN":

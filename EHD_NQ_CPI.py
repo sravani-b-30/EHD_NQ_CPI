@@ -329,6 +329,11 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     # Load price data specific to the brand
     price_data_df = load_latest_csv_from_s3(folder, price_data_prefix)
 
+    merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
+    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
+    merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
+    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
+
     return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
 
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection

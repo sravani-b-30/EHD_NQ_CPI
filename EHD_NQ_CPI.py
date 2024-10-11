@@ -269,7 +269,7 @@ bucket_name = 'anarix-cpi'
 # UI: Brand Selection
 brand_selection = st.radio("Select Brand", ["EUROPEAN_HOME_DESIGNS", "NAPQUEEN"])
 
-# Determine S3 folder and file prefixes based on the selected brand
+# Determine folder and file prefixes based on selected brand
 if brand_selection == "EUROPEAN_HOME_DESIGNS":
     s3_folder = "EUROPEAN_HOME_DESIGNS/"
     price_data_prefix = "ehd_price_data"
@@ -280,12 +280,12 @@ else:  # NAPQUEEN
     static_file_name = "NAPQUEEN.csv"
 
 # Define functions for S3 operations
-def get_latest_file_from_s3(prefix):
-    """Fetches the latest file based on LastModified timestamp for a given prefix."""
-    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_folder)
+def get_latest_file_from_s3(folder, prefix):
+    """Fetches the latest file based on LastModified timestamp for a given folder and prefix."""
+    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=folder)
     all_files = [
         obj['Key'] for obj in response.get('Contents', [])
-        if obj['Key'].startswith(f"{s3_folder}{prefix}")
+        if obj['Key'].startswith(f"{folder}{prefix}")
     ]
     if not all_files:
         raise FileNotFoundError(f"No files found with prefix {prefix}")
@@ -296,73 +296,70 @@ def get_latest_file_from_s3(prefix):
     )
     return latest_file
 
-def load_latest_csv_from_s3(prefix):
+def load_latest_csv_from_s3(folder, prefix):
     """Loads the latest CSV file for a given prefix."""
-    latest_file_key = get_latest_file_from_s3(prefix)
+    latest_file_key = get_latest_file_from_s3(folder, prefix)
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
     return pd.read_csv(obj['Body'], low_memory=False)
 
-def load_static_file_from_s3(file_name):
+def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
-    s3_key = f"{s3_folder}{file_name}"
+    s3_key = f"{folder}{file_name}"
     obj = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
     return pd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
 
-# Load and preprocess data based on the brand selected
+# Load and preprocess data based on the selected brand
 @st.cache_data
-def load_and_preprocess_data():
-    asin_keyword_df = load_latest_csv_from_s3('asin_keyword_id_mapping')
-    keyword_id_df = load_latest_csv_from_s3('keyword_x_keyword_id')
+def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
+    asin_keyword_df = load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping')
+    keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id')
 
-    df_scrapped = load_static_file_from_s3(static_file_name)
+    df_scrapped = load_static_file_from_s3(folder, static_file_name)
     df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
     df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
     # Load dynamic files with latest dates
-    merged_data_df = load_latest_csv_from_s3('merged_data_')
+    merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_')
     merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
     merged_data_df['asin'] = merged_data_df['asin'].str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
     merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
     merged_data_df = pd.merge(df_scrapped_cleaned, merged_data_df[['asin', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
 
-    # Load price data based on brand
-    price_data_df = load_latest_csv_from_s3(price_data_prefix)
-    
-    # Continue processing as per original code
-    merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
-    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
-    merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
-    merged_data_df['Drop Down'] = merged_data_df['Option'].apply(parse_dict_str)
-
-    # Brand-specific processing for NAPQUEEN
-    if brand_selection == "NAPQUEEN":
-        merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
-        merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
-
-        def update_product_details(row):
-            details = row['Product Details']
-            details['Style'] = row['Style']
-            details['Size'] = row['Size']
-            return details
-
-        merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1)
-
-        def extract_dimensions(details):
-            if isinstance(details, dict):
-                return details.get('Product Dimensions', None)
-            return None
-
-        merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].apply(extract_dimensions)
-
-        reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
-        merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
-        merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
-        merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
+    # Load price data specific to the brand
+    price_data_df = load_latest_csv_from_s3(folder, price_data_prefix)
 
     return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
 
-asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data()
+# Call the load_and_preprocess_data with specific folder and file names based on brand selection
+asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
+
+# Brand-specific post-processing
+if brand_selection == "NAPQUEEN":
+    # NAPQUEEN-specific processing
+    merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
+    merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
+
+    def update_product_details(row):
+        details = row['Product Details']
+        details['Style'] = row['Style']
+        details['Size'] = row['Size']
+        return details
+
+    merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1)
+
+    def extract_dimensions(details):
+        if isinstance(details, dict):
+            return details.get('Product Dimensions', None)
+        return None
+
+    merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].apply(extract_dimensions)
+
+    reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
+    merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
+    merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
+    merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
+
 
 # Only load data once at the beginning, using st.session_state to store it
 #if 'loaded_data' not in st.session_state:

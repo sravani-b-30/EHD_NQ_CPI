@@ -461,16 +461,41 @@ if brand_selection == "NAPQUEEN":
         meta=meta
     )
 
+    # Define metadata with all expected columns, including those from the reference dataframe
+    meta = {
+    'Product Details': 'object',
+    'Style': 'object',
+    'Size': 'object',
+    'Product Dimensions': 'object',
+    'Size_ref': 'object',
+    'Style_ref': 'object',
+    'asin': 'object',
+    'brand': 'object',
+    'product_title': 'object',
+    'price': 'float64',  # Adjust dtype as needed
+    'date': 'datetime64[ns]',  # Adjust dtype
+     }
+
     reference_df = dd.read_csv('product_dimension_size_style_reference.csv')
-    merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
-    
+
+    # Merge with the reference data on 'Product Dimensions' and assign explicit metadata
+    merged_data_df = merged_data_df.merge(
+    reference_df, 
+    on='Product Dimensions', 
+    how='left', 
+    suffixes=('', '_ref'),
+    meta=meta
+    )
+
+    # Use map_partitions to fill missing values in 'Size' and 'Style' from 'Size_ref' and 'Style_ref'
     merged_data_df = merged_data_df.map_partitions(
     lambda df: df.assign(
         Size=df['Size'].combine_first(df['Size_ref']),
         Style=df['Style'].combine_first(df['Style_ref'])
     ),
-    meta=merged_data_df
-)
+    meta=meta
+    )
+
     
     # Compute final DataFrame for Streamlit
     merged_data_df = merged_data_df.compute()

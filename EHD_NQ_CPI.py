@@ -400,9 +400,8 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
-# Brand-specific post-processing
-if brand_selection == "NAPQUEEN":
-    # NAPQUEEN-specific processing
+
+''' # NAPQUEEN-specific processing
     merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda x: x.apply(extract_style))
     merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda x: x.apply(extract_size))
 
@@ -432,6 +431,31 @@ if brand_selection == "NAPQUEEN":
     
     # Compute final DataFrame for Streamlit
     merged_data_df = merged_data_df.compute()
+'''
+# Brand-specific post-processing
+if brand_selection == "NAPQUEEN":
+    merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
+    merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
+
+    def update_product_details(row):
+        details = row['Product Details']
+        details['Style'] = row['Style']
+        details['Size'] = row['Size']
+        return details
+
+    merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1)
+
+    def extract_dimensions(details):
+        if isinstance(details, dict):
+            return details.get('Product Dimensions', None)
+        return None
+
+    merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].apply(extract_dimensions)
+
+    reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
+    merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
+    merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
+    merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
 
 # Only load data once at the beginning, using st.session_state to store it
 #if 'loaded_data' not in st.session_state:

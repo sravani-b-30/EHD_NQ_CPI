@@ -434,12 +434,14 @@ if brand_selection == "NAPQUEEN":
     )
 
     merged_data_df['Product Details'] = merged_data_df[['Product Details', 'Style', 'Size']].map_partitions(
-        lambda df: df.apply(update_product_details, axis=1)
+        lambda df: df.apply(update_product_details, axis=1),
+        meta=('Product Details', 'object')
     )
 
     
     merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].map_partitions(
-        lambda x: x.apply(lambda details: details.get('Product Dimensions', None) if isinstance(details, dict) else None)
+        lambda x: x.apply(lambda details: details.get('Product Dimensions', None) if isinstance(details, dict) else None),
+        meta=('Product Dimensions', 'object')
     )
 
     reference_df = dd.read_csv('product_dimension_size_style_reference.csv')

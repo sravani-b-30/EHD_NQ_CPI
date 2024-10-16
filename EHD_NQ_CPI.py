@@ -369,11 +369,14 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     merged_data_df['asin'] = merged_data_df['asin'].astype(str).str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
 
-    missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-    merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].map_partitions(
-        lambda x: x.apply(extract_brand_from_title)
-    )
+    # Define a function to extract brand in Dask
+    def fill_missing_brand(df):
+        missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
+        df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+        return df
 
+    # Apply the function across partitions in Dask
+    merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
     
     merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
     merged_data_df = df_scrapped_cleaned.merge(merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')

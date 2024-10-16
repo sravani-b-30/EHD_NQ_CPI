@@ -329,7 +329,8 @@ def load_latest_csv_from_s3(folder, prefix):
             'ads_date_ref': 'object'
         }
     )
-
+    
+    df = df.persist()
     # Delete the temp file after loading
     os.remove(tmp_file_path)
     return df
@@ -350,7 +351,8 @@ def load_static_file_from_s3(folder, file_name):
         on_bad_lines='skip',
         dtype={'asin': 'object'}
     )
-
+    
+    df = df.persist()
     os.remove(tmp_file_path)
     return df
 

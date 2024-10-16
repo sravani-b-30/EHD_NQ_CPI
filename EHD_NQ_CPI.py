@@ -310,33 +310,29 @@ def load_latest_csv_from_s3(folder, prefix):
         tmp_file.write(obj['Body'].read())
         tmp_file_path = tmp_file.name  # Store the path of the temp file
     
-    # Use Dask delayed to read the file first, then delete it
-    @dask.delayed
-    def read_and_remove_file(file_path):
-        df = dd.read_csv(
-            file_path,
-            assume_missing=True,
-            low_memory=False,
-            dtype={
-                'asin': 'object',
-                'ASIN': 'object',
-                'Description': 'object',
-                'Drop Down': 'object',
-                'Glance Icon Details': 'object',
-                'Option': 'object',
-                'Product Details': 'object',
-                'Rating': 'object',
-                'Review Count': 'object',
-                'Title': 'object',
-                'ads_date_ref': 'object'
-            }
-        )
-        os.remove(file_path)  # Remove the file only after reading
-        return df
+    # Load the file with Dask without computing immediately
+    df = dd.read_csv(
+        tmp_file_path,
+        assume_missing=True,
+        low_memory=False,
+        dtype={
+            'asin': 'object',
+            'ASIN': 'object',
+            'Description': 'object',
+            'Drop Down': 'object',
+            'Glance Icon Details': 'object',
+            'Option': 'object',
+            'Product Details': 'object',
+            'Rating': 'object',
+            'Review Count': 'object',
+            'Title': 'object',
+            'ads_date_ref': 'object'
+        }
+    )
 
-    # Execute read and delete through delayed
-    return read_and_remove_file(tmp_file_path)
-
+    # Delete the temp file after loading
+    os.remove(tmp_file_path)
+    return df
 
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
@@ -348,20 +344,15 @@ def load_static_file_from_s3(folder, file_name):
         tmp_file.write(obj['Body'].read())
         tmp_file_path = tmp_file.name  # Get the file path
 
-    # Use Dask delayed to read the file first, then delete it
-    @dask.delayed
-    def read_and_remove_file(file_path):
-        df = dd.read_csv(
-            file_path,
-            low_memory=False,
-            on_bad_lines='skip',
-            dtype={'asin': 'object'}
-        )
-        os.remove(file_path)  # Remove the file only after reading
-        return df
+    df = dd.read_csv(
+        tmp_file_path,
+        low_memory=False,
+        on_bad_lines='skip',
+        dtype={'asin': 'object'}
+    )
 
-    # Execute read and delete through delayed
-    return read_and_remove_file(tmp_file_path)
+    os.remove(tmp_file_path)
+    return df
 
 # Load and preprocess data based on the selected brand
 @st.cache_data

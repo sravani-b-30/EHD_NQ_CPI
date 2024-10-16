@@ -409,15 +409,25 @@ def update_product_details(row):
 
 # Define the expected output structure for Dask (meta)
 meta = {
+    'asin': 'object',
+    'ASIN': 'object',
+    'Description': 'object',
+    'Drop Down': 'object',
+    'Glance Icon Details': 'object',
+    'Option': 'object',
+    'Rating': 'object',
+    'Review Count': 'object',
+    'Title': 'object',
     'Product Details': 'object',
     'Style': 'object',
     'Size': 'object',
     'Product Dimensions': 'object',
-    'asin': 'object',
     'brand': 'object',
     'product_title': 'object',
-    'price': 'float64',  # Adjust dtype as needed
-    'date': 'datetime64[ns]',  # Adjust dtype
+    'price': 'float64',
+    'date': 'datetime64[ns]',
+    'Size_ref': 'object',  # added for merged reference data
+    'Style_ref': 'object'  # added for merged reference data
 }
 
 def extract_dimensions(details):

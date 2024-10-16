@@ -350,7 +350,7 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     # Load dynamic files with latest dates
     merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_')
     merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
-    merged_data_df['asin'] = merged_data_df['asin'].str.upper()
+    merged_data_df['asin'] = merged_data_df['asin'].astype(str).str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
     merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
     merged_data_df = df_scrapped_cleaned.merge(merged_data_df[['asin', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')

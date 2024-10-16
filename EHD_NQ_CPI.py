@@ -412,7 +412,12 @@ meta = {
     'Product Details': 'object',
     'Style': 'object',
     'Size': 'object',
-    'Product Dimensions': 'object'
+    'Product Dimensions': 'object',
+    'asin': 'object',
+    'brand': 'object',
+    'product_title': 'object',
+    'price': 'float64',  # Adjust dtype as needed
+    'date': 'datetime64[ns]',  # Adjust dtype
 }
 
 def extract_dimensions(details):
@@ -424,14 +429,14 @@ def extract_dimensions(details):
 if brand_selection == "NAPQUEEN":
 
     merged_data_df = merged_data_df.map_partitions(
-    lambda df: df.assign(Style=df['product_title'].apply(extract_style)),
-    meta=merged_data_df
+        lambda df: df.assign(Style=df['product_title'].apply(extract_style)),
+        meta=meta
     )
 
     # Similarly, for 'Size'
     merged_data_df = merged_data_df.map_partitions(
-    lambda df: df.assign(Size=df['product_title'].apply(extract_size)),
-    meta=merged_data_df
+        lambda df: df.assign(Size=df['product_title'].apply(extract_size)),
+        meta=meta
     )
 
     # Apply the update_product_details function with explicit meta to modify Product Details

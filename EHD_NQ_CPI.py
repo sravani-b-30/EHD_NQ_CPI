@@ -463,8 +463,14 @@ if brand_selection == "NAPQUEEN":
 
     reference_df = dd.read_csv('product_dimension_size_style_reference.csv')
     merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
-    merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'].values)
-    merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'].values)
+    
+    merged_data_df = merged_data_df.map_partitions(
+    lambda df: df.assign(
+        Size=df['Size'].combine_first(df['Size_ref']),
+        Style=df['Style'].combine_first(df['Style_ref'])
+    ),
+    meta=merged_data_df
+)
     
     # Compute final DataFrame for Streamlit
     merged_data_df = merged_data_df.compute()

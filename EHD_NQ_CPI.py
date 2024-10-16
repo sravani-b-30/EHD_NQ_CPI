@@ -311,9 +311,24 @@ def load_latest_csv_from_s3(folder, prefix):
     
     # Use Dask to read the temporary file
     try:
-        df = dd.read_csv(tmp_file_path, assume_missing=True, low_memory=False, dtype={'asin': 'object'}).compute()
+        df = dd.read_csv(
+            tmp_file_path,
+            assume_missing=True,
+            low_memory=False,
+            dtype={
+                'asin': 'object',
+                'ASIN': 'object',
+                'Description': 'object',
+                'Drop Down': 'object',
+                'Glance Icon Details': 'object',
+                'Option': 'object',
+                'Product Details': 'object',
+                'Rating': 'object',
+                'Review Count': 'object',
+                'Title': 'object'
+            }
+        ).compute()  # Explicitly compute here
     finally:
-        # Ensure the temporary file is deleted after Dask reads it
         os.remove(tmp_file_path)
     
     return df

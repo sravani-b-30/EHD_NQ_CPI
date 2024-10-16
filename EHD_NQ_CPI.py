@@ -395,7 +395,7 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     merged_data_df['Option'] = merged_data_df['Option'].map_partitions(parse_dict_str)
     merged_data_df['Drop Down'] = merged_data_df['Drop Down'].map_partitions(parse_dict_str)
 
-    return asin_keyword_df.compute(), keyword_id_df.compute(), merged_data_df.compute(), price_data_df.compute()
+    return asin_keyword_df.compute(), keyword_id_df.compute(), merged_data_df , price_data_df.compute()
 
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
@@ -403,7 +403,7 @@ asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preproc
 
 # NAPQUEEN-specific processing
 if brand_selection == "NAPQUEEN":
-    
+
     merged_data_df = merged_data_df.map_partitions(
     lambda df: df.assign(Style=df['product_title'].apply(extract_style))
     )

@@ -325,7 +325,8 @@ def load_latest_csv_from_s3(folder, prefix):
                 'Product Details': 'object',
                 'Rating': 'object',
                 'Review Count': 'object',
-                'Title': 'object'
+                'Title': 'object',
+                'ads_date_ref': 'object'
             }
         ).compute()  # Explicitly compute here
     finally:
@@ -372,6 +373,8 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 
     # Load price data specific to the brand
     price_data_df = load_latest_csv_from_s3(folder, price_data_prefix)
+    if 'ads_date_ref' in price_data_df.columns:
+        price_data_df['ads_date_ref'] = pd.to_datetime(price_data_df['ads_date_ref'], errors='coerce')
 
     merged_data_df['Product Details'] = merged_data_df['Product Details'].map_partitions(parse_dict_str)
     merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].map_partitions(parse_dict_str)

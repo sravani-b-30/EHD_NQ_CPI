@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import streamlit as st 
 import boto3
 from datetime import datetime
+import dask.dataframe as dd
 
 
 nltk.download('punkt', quiet=True)
@@ -300,13 +301,13 @@ def load_latest_csv_from_s3(folder, prefix):
     """Loads the latest CSV file for a given prefix."""
     latest_file_key = get_latest_file_from_s3(folder, prefix)
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
-    return pd.read_csv(obj['Body'], low_memory=False)
+    return dd.read_csv(obj['Body'], low_memory=False)
 
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
     s3_key = f"{folder}{file_name}"
     obj = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-    return pd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
+    return dd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
 
 # Load and preprocess data based on the selected brand
 @st.cache_data
@@ -323,18 +324,21 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
     merged_data_df['asin'] = merged_data_df['asin'].str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
-    merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
-    merged_data_df = pd.merge(df_scrapped_cleaned, merged_data_df[['asin', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
+    merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
+    merged_data_df = df_scrapped_cleaned.merge(merged_data_df[['asin', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
 
     # Load price data specific to the brand
     price_data_df = load_latest_csv_from_s3(folder, price_data_prefix)
 
-    merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
-    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
-    merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
-    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
+    merged_data_df['Product Details'] = merged_data_df['Product Details'].map_partitions(parse_dict_str)
+    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].map_partitions(parse_dict_str)
+    merged_data_df['Option'] = merged_data_df['Option'].map_partitions(parse_dict_str)
+    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].map_partitions(parse_dict_str)
 
-    return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
+    return (asin_keyword_df.compute(), 
+            keyword_id_df.compute(), 
+            merged_data_df.compute(), 
+            price_data_df.compute())
 
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
@@ -342,8 +346,8 @@ asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preproc
 # Brand-specific post-processing
 if brand_selection == "NAPQUEEN":
     # NAPQUEEN-specific processing
-    merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
-    merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
+    merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda x: x.apply(extract_style))
+    merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda x: x.apply(extract_size))
 
     def update_product_details(row):
         details = row['Product Details']
@@ -351,20 +355,26 @@ if brand_selection == "NAPQUEEN":
         details['Size'] = row['Size']
         return details
 
-    merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1)
+    merged_data_df['Product Details'] = merged_data_df[['Product Details', 'Style', 'Size']].map_partitions(
+        lambda df: df.apply(update_product_details, axis=1)
+    )
 
     def extract_dimensions(details):
         if isinstance(details, dict):
             return details.get('Product Dimensions', None)
         return None
 
-    merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].apply(extract_dimensions)
+    merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].map_partitions(
+        lambda x: x.apply(extract_dimensions)
+    )
 
-    reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
+    reference_df = dd.read_csv('product_dimension_size_style_reference.csv')
     merged_data_df = merged_data_df.merge(reference_df, on='Product Dimensions', how='left', suffixes=('', '_ref'))
     merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
     merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
-
+    
+    # Compute final DataFrame for Streamlit
+    merged_data_df = merged_data_df.compute()
 
 # Only load data once at the beginning, using st.session_state to store it
 #if 'loaded_data' not in st.session_state:

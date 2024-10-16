@@ -484,7 +484,6 @@ if brand_selection == "NAPQUEEN":
     on='Product Dimensions', 
     how='left', 
     suffixes=('', '_ref'),
-    meta=meta
     )
 
     # Use map_partitions to fill missing values in 'Size' and 'Style' from 'Size_ref' and 'Style_ref'

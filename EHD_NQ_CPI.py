@@ -16,6 +16,8 @@ import streamlit as st
 import boto3
 from datetime import datetime
 import dask.dataframe as dd
+import tempfile
+import os 
 
 
 nltk.download('punkt', quiet=True)
@@ -301,13 +303,39 @@ def load_latest_csv_from_s3(folder, prefix):
     """Loads the latest CSV file for a given prefix."""
     latest_file_key = get_latest_file_from_s3(folder, prefix)
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
-    return dd.read_csv(obj['Body'], low_memory=False)
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+        # Write the content of the S3 object to the temporary file
+        tmp_file.write(obj['Body'].read())
+        tmp_file_path = tmp_file.name  # Store the path of the temp file
+    
+    # Use Dask to read the temporary file
+    try:
+        df = dd.read_csv(tmp_file_path, assume_missing=True, low_memory=False)
+    finally:
+        # Ensure the temporary file is deleted after Dask reads it
+        os.remove(tmp_file_path)
+    
+    return df
 
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
     s3_key = f"{folder}{file_name}"
     obj = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-    return dd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
+     # Create a temporary file to store the data
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+        # Write S3 content to the temporary file
+        tmp_file.write(obj['Body'].read())
+        tmp_file_path = tmp_file.name  # Get the file path
+
+    # Load the temporary file with Dask
+    try:
+        df = dd.read_csv(tmp_file_path, low_memory=False, on_bad_lines='skip')
+    finally:
+        # Remove the temporary file to clean up
+        os.remove(tmp_file_path)
+    
+    return df
 
 # Load and preprocess data based on the selected brand
 @st.cache_data

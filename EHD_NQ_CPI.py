@@ -18,6 +18,7 @@ from datetime import datetime
 import dask.dataframe as dd
 import tempfile
 import os 
+import dask.delayed
 
 
 nltk.download('punkt', quiet=True)
@@ -309,10 +310,11 @@ def load_latest_csv_from_s3(folder, prefix):
         tmp_file.write(obj['Body'].read())
         tmp_file_path = tmp_file.name  # Store the path of the temp file
     
-    # Use Dask to read the temporary file
-    try:
+    # Use Dask delayed to read the file first, then delete it
+    @dask.delayed
+    def read_and_remove_file(file_path):
         df = dd.read_csv(
-            tmp_file_path,
+            file_path,
             assume_missing=True,
             low_memory=False,
             dtype={
@@ -329,10 +331,12 @@ def load_latest_csv_from_s3(folder, prefix):
                 'ads_date_ref': 'object'
             }
         )
-    finally:
-        os.remove(tmp_file_path)
-    
-    return df
+        os.remove(file_path)  # Remove the file only after reading
+        return df
+
+    # Execute read and delete through delayed
+    return read_and_remove_file(tmp_file_path)
+
 
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
@@ -344,14 +348,20 @@ def load_static_file_from_s3(folder, file_name):
         tmp_file.write(obj['Body'].read())
         tmp_file_path = tmp_file.name  # Get the file path
 
-    # Load the temporary file with Dask
-    try:
-        df = dd.read_csv(tmp_file_path, low_memory=False, on_bad_lines='skip', dtype={'asin': 'object'})
-    finally:
-        # Remove the temporary file to clean up
-        os.remove(tmp_file_path)
-    
-    return df
+    # Use Dask delayed to read the file first, then delete it
+    @dask.delayed
+    def read_and_remove_file(file_path):
+        df = dd.read_csv(
+            file_path,
+            low_memory=False,
+            on_bad_lines='skip',
+            dtype={'asin': 'object'}
+        )
+        os.remove(file_path)  # Remove the file only after reading
+        return df
+
+    # Execute read and delete through delayed
+    return read_and_remove_file(tmp_file_path)
 
 # Load and preprocess data based on the selected brand
 @st.cache_data

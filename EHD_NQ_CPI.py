@@ -356,6 +356,12 @@ def load_static_file_from_s3(folder, file_name):
     os.remove(tmp_file_path)
     return df
 
+# Define a function to extract brand in Dask
+def fill_missing_brand(df):
+    missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
+    df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+    return df
+
 # Load and preprocess data based on the selected brand
 @st.cache_data
 def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
@@ -371,12 +377,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
     merged_data_df['asin'] = merged_data_df['asin'].astype(str).str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
-
-    # Define a function to extract brand in Dask
-    def fill_missing_brand(df):
-        missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
-        df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-        return df
 
     # Apply the function across partitions in Dask
     merged_data_df = merged_data_df.map_partitions(fill_missing_brand)

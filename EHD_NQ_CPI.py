@@ -423,12 +423,14 @@ def extract_dimensions(details):
 if brand_selection == "NAPQUEEN":
 
     merged_data_df = merged_data_df.map_partitions(
-    lambda df: df.assign(Style=df['product_title'].apply(extract_style))
+    lambda df: df.assign(Style=df['product_title'].apply(extract_style)),
+    meta=merged_data_df
     )
 
     # Similarly, for 'Size'
     merged_data_df = merged_data_df.map_partitions(
-    lambda df: df.assign(Size=df['product_title'].apply(extract_size))
+    lambda df: df.assign(Size=df['product_title'].apply(extract_size)),
+    meta=merged_data_df
     )
 
     merged_data_df['Product Details'] = merged_data_df[['Product Details', 'Style', 'Size']].map_partitions(

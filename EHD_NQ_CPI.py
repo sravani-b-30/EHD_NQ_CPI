@@ -376,10 +376,10 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     if 'ads_date_ref' in price_data_df.columns:
         price_data_df['ads_date_ref'] = pd.to_datetime(price_data_df['ads_date_ref'], errors='coerce')
 
-    merged_data_df['Product Details'] = merged_data_df['Product Details'].map_partitions(parse_dict_str)
-    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].map_partitions(parse_dict_str)
-    merged_data_df['Option'] = merged_data_df['Option'].map_partitions(parse_dict_str)
-    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].map_partitions(parse_dict_str)
+    merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
+    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
+    merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
+    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
 
     return (asin_keyword_df.compute(), 
             keyword_id_df.compute(), 

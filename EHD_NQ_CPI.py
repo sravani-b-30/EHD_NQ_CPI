@@ -311,7 +311,7 @@ def load_latest_csv_from_s3(folder, prefix):
     
     # Use Dask to read the temporary file
     try:
-        df = dd.read_csv(tmp_file_path, assume_missing=True, low_memory=False).compute()
+        df = dd.read_csv(tmp_file_path, assume_missing=True, low_memory=False, dtype={'asin': 'object'}).compute()
     finally:
         # Ensure the temporary file is deleted after Dask reads it
         os.remove(tmp_file_path)
@@ -330,7 +330,7 @@ def load_static_file_from_s3(folder, file_name):
 
     # Load the temporary file with Dask
     try:
-        df = dd.read_csv(tmp_file_path, low_memory=False, on_bad_lines='skip').compute()
+        df = dd.read_csv(tmp_file_path, low_memory=False, on_bad_lines='skip', dtype={'asin': 'object'}).compute()
     finally:
         # Remove the temporary file to clean up
         os.remove(tmp_file_path)

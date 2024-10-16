@@ -400,6 +400,24 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
+# Define the function to update Product Details
+def update_product_details(row):
+    details = row['Product Details'].copy()  # Make a copy to avoid modifying in place
+    details['Style'] = row['Style']
+    details['Size'] = row['Size']
+    return details
+
+# Define the expected output structure for Dask (meta)
+meta = {
+    'Product Details': 'object',
+    'Style': 'object',
+    'Size': 'object'
+}
+
+def extract_dimensions(details):
+        if isinstance(details, dict):
+            return details.get('Product Dimensions', None)
+        return None
 
 # NAPQUEEN-specific processing
 if brand_selection == "NAPQUEEN":
@@ -413,21 +431,11 @@ if brand_selection == "NAPQUEEN":
     lambda df: df.assign(Size=df['product_title'].apply(extract_size))
     )
 
-    def update_product_details(row):
-        details = row['Product Details']
-        details['Style'] = row['Style']
-        details['Size'] = row['Size']
-        return details
-
     merged_data_df['Product Details'] = merged_data_df[['Product Details', 'Style', 'Size']].map_partitions(
         lambda df: df.apply(update_product_details, axis=1)
     )
 
-    def extract_dimensions(details):
-        if isinstance(details, dict):
-            return details.get('Product Dimensions', None)
-        return None
-
+    
     merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].map_partitions(
         lambda x: x.apply(lambda details: details.get('Product Dimensions', None) if isinstance(details, dict) else None)
     )

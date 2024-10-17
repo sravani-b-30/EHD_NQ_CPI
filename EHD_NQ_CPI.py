@@ -400,6 +400,10 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
+# Conditionally compute merged_data_df if EUROPEAN_HOME_DESIGNS is selected
+if brand_selection == "EUROPEAN_HOME_DESIGNS":
+    merged_data_df = merged_data_df.compute()  
+    
 # Define the function to update Product Details
 def update_product_details(row):
     details = row['Product Details'].copy()  # Make a copy to avoid modifying in place
@@ -1287,21 +1291,11 @@ if st.session_state['show_features_clicked'] and asin in merged_data_df['ASIN'].
 
 # Automatically display checkboxes for each product detail feature (if ASIN exists)
 compulsory_features_vars = {}
-
-# Compute the ASIN column and check if the ASIN exists
-asin_column = merged_data_df['ASIN'].compute()  # Converts ASIN column to a Pandas Series
-
-if asin in asin_column.values:
-    # Filter the merged_data_df to get only the row with the matching ASIN
-    product_row = merged_data_df[merged_data_df['ASIN'] == asin].compute()  # Convert the row to a Pandas DataFrame
-    product_details = product_row.iloc[0]['Product Details']  # Access 'Product Details' for the specific ASIN
-
+if asin in merged_data_df['ASIN'].values:
+    product_details = merged_data_df[merged_data_df['ASIN'] == asin].iloc[0]['Product Details']
     st.write("Select compulsory features:")
     for feature in product_details.keys():
-        # Dynamically create checkboxes for each feature
         compulsory_features_vars[feature] = st.checkbox(f"Include {feature}", key=f"checkbox_{feature}")
-else:
-    st.error("ASIN not found in dataset.")
 
 # Collect selected compulsory features
 compulsory_features = [feature for feature, selected in compulsory_features_vars.items() if selected]

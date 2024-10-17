@@ -486,19 +486,15 @@ if brand_selection == "NAPQUEEN":
     suffixes=('', '_ref'),
     )
 
-    # Use map_partitions to fill missing values in 'Size' and 'Style' from 'Size_ref' and 'Style_ref'
-    merged_data_df = merged_data_df.map_partitions(
-    lambda df: df.assign(
-        Size=df['Size'].combine_first(df['Size_ref']),
-        Style=df['Style'].combine_first(df['Style_ref'])
-    ),
-    meta=meta
-    )
+    # Explicitly fill missing Size and Style values
+    merged_data_df['Size'] = merged_data_df['Size'].combine_first(merged_data_df['Size_ref'])
+    merged_data_df['Style'] = merged_data_df['Style'].combine_first(merged_data_df['Style_ref'])
 
-    
-    # Compute final DataFrame for Streamlit
+    # Drop the temporary _ref columns if they are no longer needed
+    merged_data_df = merged_data_df.drop(columns=['Size_ref', 'Style_ref'])
+
+    # Compute the final DataFrame for Streamlit
     merged_data_df = merged_data_df.compute()
-
 # Only load data once at the beginning, using st.session_state to store it
 #if 'loaded_data' not in st.session_state:
     #st.session_state['loaded_data'] = load_and_preprocess_data()

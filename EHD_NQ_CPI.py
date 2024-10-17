@@ -346,9 +346,11 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
             left_on='ASIN', right_on='asin', how='left'
         )
         
-        # Ensure parse_dict_str is applied to convert columns to dictionaries
+        # Parse dictionary columns
         for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            merged_data_df[col] = merged_data_df[col].apply(parse_dict_str)
+            merged_data_df[col] = merged_data_df[col].map_partitions(
+                lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
+            )
 
         merged_data_df = merged_data_df.compute()
 
@@ -389,10 +391,12 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
         price_data_df = dd.from_delayed([price_data_delayed])
 
-        # Ensure parse_dict_str is applied
+        # Parse dictionary columns
         for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
-            
+            merged_data_df[col] = merged_data_df[col].map_partitions(
+                lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
+            )
+
         # Specific transformations for NAPQUEEN
         merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_style))
         merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_size))

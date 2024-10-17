@@ -324,7 +324,7 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
         # Load dynamic files with latest dates
-        merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_').compute()
+        merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_')
         merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
         merged_data_df['asin'] = merged_data_df['asin'].str.upper()
         merged_data_df['ASIN'] = merged_data_df['asin']
@@ -334,12 +334,18 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
             missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
             merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
 
-        merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
-        merged_data_df = pd.merge(
+        merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
+        merged_data_df = dd.merge(
             df_scrapped_cleaned,
             merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']],
             left_on='ASIN', right_on='asin', how='left'
         )
+        
+        # Parse dictionary columns in parallel with map_partitions
+        for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
+            merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
+        
+        merged_data_df = merged_data_df.compute()
 
         price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
 

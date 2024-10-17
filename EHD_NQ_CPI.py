@@ -304,14 +304,14 @@ def load_latest_csv_from_s3(folder, prefix):
     """Loads the latest CSV file for a given prefix."""
     latest_file_key = get_latest_file_from_s3(folder, prefix)
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
-    return dd.read_csv(obj['Body'], low_memory=False)
+    return pd.read_csv(obj['Body'], low_memory=False)
 
 @delayed
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
     s3_key = f"{folder}{file_name}"
     obj = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-    return dd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
+    return pd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
 
 # Load and preprocess data based on the selected brand
 @st.cache_data

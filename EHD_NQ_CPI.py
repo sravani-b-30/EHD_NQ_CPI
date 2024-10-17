@@ -281,7 +281,7 @@ else:  # NAPQUEEN
     price_data_prefix = "napqueen_price_tracker"
     static_file_name = "NAPQUEEN.csv"
 
-@delayed
+
 # Define functions for S3 operations
 def get_latest_file_from_s3(folder, prefix):
     """Fetches the latest file based on LastModified timestamp for a given folder and prefix."""

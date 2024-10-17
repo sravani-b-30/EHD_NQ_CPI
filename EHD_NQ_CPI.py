@@ -330,10 +330,14 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         merged_data_df['asin'] = merged_data_df['asin'].str.upper()
         merged_data_df['ASIN'] = merged_data_df['asin']
 
-        # Fill missing brand if brand column exists
-        if 'brand' in merged_data_df.columns:
-            missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-            merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+        # Define a function to fill missing brands
+        def fill_missing_brand(df):
+            missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
+            df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+            return df
+
+        # Apply function across partitions
+        merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
 
         merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
         merged_data_df = dd.merge(

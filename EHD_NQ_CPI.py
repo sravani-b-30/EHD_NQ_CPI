@@ -346,10 +346,10 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
             left_on='ASIN', right_on='asin', how='left'
         )
         
-        # Parse dictionary columns in parallel with map_partitions
+        # Ensure parse_dict_str is applied to convert columns to dictionaries
         for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
-        
+            merged_data_df[col] = merged_data_df[col].apply(parse_dict_str)
+
         merged_data_df = merged_data_df.compute()
 
         price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
@@ -389,17 +389,18 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
         price_data_df = dd.from_delayed([price_data_delayed])
 
-        # Parse dictionary columns in parallel with map_partitions
+        # Ensure parse_dict_str is applied
         for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
             merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
-
+            
         # Specific transformations for NAPQUEEN
         merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_style))
         merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_size))
 
         # Update Product Details with Style and Size
         def update_product_details(row):
-            details = row['Product Details']
+            details = row['Product Details'] if isinstance(row['Product Details'], dict) else {}
+            details['Style'] = row['Style']
             details['Style'] = row['Style']
             details['Size'] = row['Size']
             return details

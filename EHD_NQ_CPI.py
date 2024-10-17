@@ -16,9 +16,7 @@ import streamlit as st
 import boto3
 from datetime import datetime
 import dask.dataframe as dd
-import tempfile
-import os 
-import dask.delayed
+from dask import delayed
 
 
 nltk.download('punkt', quiet=True)
@@ -283,6 +281,7 @@ else:  # NAPQUEEN
     price_data_prefix = "napqueen_price_tracker"
     static_file_name = "NAPQUEEN.csv"
 
+@delayed
 # Define functions for S3 operations
 def get_latest_file_from_s3(folder, prefix):
     """Fetches the latest file based on LastModified timestamp for a given folder and prefix."""
@@ -300,223 +299,92 @@ def get_latest_file_from_s3(folder, prefix):
     )
     return latest_file
 
+@delayed
 def load_latest_csv_from_s3(folder, prefix):
     """Loads the latest CSV file for a given prefix."""
     latest_file_key = get_latest_file_from_s3(folder, prefix)
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
-    # Create a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
-        # Write the content of the S3 object to the temporary file
-        tmp_file.write(obj['Body'].read())
-        tmp_file_path = tmp_file.name  # Store the path of the temp file
-    
-    # Load the file with Dask without computing immediately
-    df = dd.read_csv(
-        tmp_file_path,
-        assume_missing=True,
-        low_memory=False,
-        dtype={
-            'asin': 'object',
-            'ASIN': 'object',
-            'Description': 'object',
-            'Drop Down': 'object',
-            'Glance Icon Details': 'object',
-            'Option': 'object',
-            'Product Details': 'object',
-            'Rating': 'object',
-            'Review Count': 'object',
-            'Title': 'object',
-            'ads_date_ref': 'object'
-        }
-    )
-    
-    df = df.persist()
-    # Delete the temp file after loading
-    os.remove(tmp_file_path)
-    return df
+    return pd.read_csv(obj['Body'], low_memory=False)
 
+@delayed
 def load_static_file_from_s3(folder, file_name):
     """Loads a static CSV file from S3 without searching for latest version."""
     s3_key = f"{folder}{file_name}"
     obj = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-     # Create a temporary file to store the data
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
-        # Write S3 content to the temporary file
-        tmp_file.write(obj['Body'].read())
-        tmp_file_path = tmp_file.name  # Get the file path
-
-    df = dd.read_csv(
-        tmp_file_path,
-        low_memory=False,
-        on_bad_lines='skip',
-        dtype={'asin': 'object'}
-    )
-    
-    df = df.persist()
-    os.remove(tmp_file_path)
-    return df
-
-# Define a function to extract brand in Dask
-def fill_missing_brand(df):
-    missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
-    df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-    return df
-
-# Helper functions to apply parse_dict_str on each column
-def parse_product_details(df):
-    return df.apply(parse_dict_str)
-
-def parse_glance_icon_details(df):
-    return df.apply(parse_dict_str)
-
-def parse_option(df):
-    return df.apply(parse_dict_str)
-
-def parse_drop_down(df):
-    return df.apply(parse_dict_str)
+    return pd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
 
 # Load and preprocess data based on the selected brand
 @st.cache_data
 def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
-    asin_keyword_df = load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping')
-    keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id')
+    asin_keyword_df =load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
+    keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()
 
-    df_scrapped = load_static_file_from_s3(folder, static_file_name)
+    df_scrapped = load_static_file_from_s3(folder, static_file_name).compute()
     df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
     df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
     # Load dynamic files with latest dates
-    merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_')
+    merged_data_delayed = delayed(load_latest_csv_from_s3(folder, 'merged_data_'))
+    merged_data_df = dd.from_delayed([merged_data_delayed])
     merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
-    merged_data_df['asin'] = merged_data_df['asin'].astype(str).str.upper()
+    merged_data_df['asin'] = merged_data_df['asin'].str.upper()
     merged_data_df['ASIN'] = merged_data_df['asin']
+    # Apply missing brand logic using Dask's `where` and `map_partitions`:
+    missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
+    merged_data_df['brand'] = merged_data_df['brand'].where(~missing_brand_mask, 
+                                                             merged_data_df['product_title'].map_partitions(
+                                                             lambda df: df.apply(extract_brand_from_title))
+                                                            )
 
-    # Apply the function across partitions in Dask
-    merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
-    
     merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
-    merged_data_df = df_scrapped_cleaned.merge(merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
+    merged_data_df = dd.merge(df_scrapped_cleaned ,merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
 
     # Load price data specific to the brand
-    price_data_df = load_latest_csv_from_s3(folder, price_data_prefix)
-    if 'ads_date_ref' in price_data_df.columns:
-        price_data_df['ads_date_ref'] = dd.to_datetime(price_data_df['ads_date_ref'], errors='coerce')
+    price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
+    price_data_df = dd.from_delayed([price_data_delayed])
 
-    merged_data_df = merged_data_df.map_partitions(parse_product_details)
-    merged_data_df = merged_data_df.map_partitions(parse_glance_icon_details)
-    merged_data_df = merged_data_df.map_partitions(parse_option)
-    merged_data_df = merged_data_df.map_partitions(parse_drop_down)
+    # Parse dictionary columns in parallel with map_partitions
+    for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
+        merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
 
-    return asin_keyword_df.compute(), keyword_id_df.compute(), merged_data_df , price_data_df.compute()
+    return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
 
-# Call the load_and_preprocess_data with specific folder and file names based on brand selection
+# Brand-specific transformations
+def brand_specific_transformations(merged_data_df):
+    if brand_selection == "NAPQUEEN":
+        # NAPQUEEN-specific processing in parallel
+        merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_style))
+        merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_size))
+
+        # Update Product Details with Style and Size
+        def update_product_details(row):
+            details = row['Product Details']
+            details['Style'] = row['Style']
+            details['Size'] = row['Size']
+            return details
+
+        merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1, meta=('x', 'object'))
+
+        # Extract dimensions and fill in missing values
+        merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].map_partitions(
+            lambda df: df.apply(lambda details: details.get('Product Dimensions', None) if isinstance(details, dict) else None)
+        )
+
+        # Read reference CSV (using Pandas as it's static)
+        reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
+        merged_data_df = merged_data_df.merge(dd.from_pandas(reference_df, npartitions=1), on='Product Dimensions', how='left', suffixes=('', '_ref'))
+        merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
+        merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
+
+    return merged_data_df
+
+# Call the load_and_preprocess_data and apply brand-specific transformations
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
+merged_data_df = brand_specific_transformations(merged_data_df)
 
-# Conditionally compute merged_data_df if EUROPEAN_HOME_DESIGNS is selected
-if brand_selection == "EUROPEAN_HOME_DESIGNS":
-    merged_data_df = merged_data_df.compute()  
-    
-    st.write(merged_data_df[['Product Details']].head())
-
-# Define the function to update Product Details
-def update_product_details(row):
-    details = row['Product Details'].copy()  # Make a copy to avoid modifying in place
-    details['Style'] = row['Style']
-    details['Size'] = row['Size']
-    return details
-
-# Define the expected output structure for Dask (meta)
-meta = {
-    'asin': 'object',
-    'ASIN': 'object',
-    'Description': 'object',
-    'Drop Down': 'object',
-    'Glance Icon Details': 'object',
-    'Option': 'object',
-    'Rating': 'object',
-    'Review Count': 'object',
-    'Title': 'object',
-    'Product Details': 'object',
-    'Style': 'object',
-    'Size': 'object',
-    'Product Dimensions': 'object',
-    'brand': 'object',
-    'product_title': 'object',
-    'price': 'float64',
-    'date': 'datetime64[ns]',
-    'Size_ref': 'object',  # added for merged reference data
-    'Style_ref': 'object'  # added for merged reference data
-}
-
-def extract_dimensions(details):
-        if isinstance(details, dict):
-            return details.get('Product Dimensions', None)
-        return None
-
-# NAPQUEEN-specific processing
-if brand_selection == "NAPQUEEN":
-
-    merged_data_df = merged_data_df.map_partitions(
-        lambda df: df.assign(Style=df['product_title'].apply(extract_style)),
-        meta=meta
-    )
-
-    # Similarly, for 'Size'
-    merged_data_df = merged_data_df.map_partitions(
-        lambda df: df.assign(Size=df['product_title'].apply(extract_size)),
-        meta=meta
-    )
-
-    # Apply the update_product_details function with explicit meta to modify Product Details
-    merged_data_df = merged_data_df.map_partitions(
-        lambda df: df.assign(**{'Product Details': df.apply(update_product_details, axis=1)}),
-        meta=meta
-    )
-    
-    # Add the Product Dimensions column with meta
-    merged_data_df = merged_data_df.map_partitions(
-        lambda df: df.assign(**{'Product Dimensions': df['Product Details'].apply(extract_dimensions)}),
-        meta=meta
-    )
-
-    # Define metadata with all expected columns, including those from the reference dataframe
-    meta = {
-    'Product Details': 'object',
-    'Style': 'object',
-    'Size': 'object',
-    'Product Dimensions': 'object',
-    'Size_ref': 'object',
-    'Style_ref': 'object',
-    'asin': 'object',
-    'brand': 'object',
-    'product_title': 'object',
-    'price': 'float64',  # Adjust dtype as needed
-    'date': 'datetime64[ns]',  # Adjust dtype
-     }
-
-    reference_df = dd.read_csv('product_dimension_size_style_reference.csv')
-
-    # Merge with the reference data on 'Product Dimensions' and assign explicit metadata
-    merged_data_df = merged_data_df.merge(
-    reference_df, 
-    on='Product Dimensions', 
-    how='left', 
-    suffixes=('', '_ref'),
-    )
-
-    # Explicitly fill missing Size and Style values
-    merged_data_df['Size'] = merged_data_df['Size'].combine_first(merged_data_df['Size_ref'])
-    merged_data_df['Style'] = merged_data_df['Style'].combine_first(merged_data_df['Style_ref'])
-
-    # Drop the temporary _ref columns if they are no longer needed
-    merged_data_df = merged_data_df.drop(columns=['Size_ref', 'Style_ref'])
-
-    # Compute the final DataFrame for Streamlit
-    merged_data_df = merged_data_df.compute()
-# Only load data once at the beginning, using st.session_state to store it
-#if 'loaded_data' not in st.session_state:
-    #st.session_state['loaded_data'] = load_and_preprocess_data()
-#asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = st.session_state['loaded_data']
+# Compute both DataFrames after all transformations are applied
+merged_data_df = merged_data_df.compute()
+price_data_df = price_data_df.compute()
 
 # Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:

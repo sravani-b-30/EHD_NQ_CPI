@@ -314,7 +314,7 @@ def load_static_file_from_s3(folder, file_name):
     return pd.read_csv(obj['Body'], low_memory=False, on_bad_lines='skip')
 
 # Load and preprocess data based on the selected brand
-@st.cache_data
+@st.cache_resource
 def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     asin_keyword_df =load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
     keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()

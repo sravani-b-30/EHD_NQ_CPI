@@ -316,43 +316,66 @@ def load_static_file_from_s3(folder, file_name):
 # Load and preprocess data based on the selected brand
 @st.cache_resource
 def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
-    asin_keyword_df =load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
-    keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()
+    if brand_selection == "EUROPEAN HOME DESIGNS":
+        asin_keyword_df = load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
+        keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()
 
-    df_scrapped = load_static_file_from_s3(folder, static_file_name).compute()
-    df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
-    df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
+        df_scrapped = load_static_file_from_s3(folder, static_file_name).compute()
+        df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
+        df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
-    # Load dynamic files with latest dates
-    merged_data_delayed = delayed(load_latest_csv_from_s3(folder, 'merged_data_'))
-    merged_data_df = dd.from_delayed([merged_data_delayed])
-    merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
-    merged_data_df['asin'] = merged_data_df['asin'].str.upper()
-    merged_data_df['ASIN'] = merged_data_df['asin']
-    # Apply missing brand logic using Dask's `where` and `map_partitions`:
-    missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-    merged_data_df['brand'] = merged_data_df['brand'].where(~missing_brand_mask, 
+        # Load dynamic files with latest dates
+        merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_').compute()
+        merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
+        merged_data_df['asin'] = merged_data_df['asin'].str.upper()
+        merged_data_df['ASIN'] = merged_data_df['asin']
+
+        # Fill missing brand using extract_brand_from_title
+        missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
+        merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+
+        merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
+        merged_data_df = pd.merge(
+            df_scrapped_cleaned,
+            merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']],
+            left_on='ASIN', right_on='asin', how='left'
+        )
+
+        price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
+
+        return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
+    else : 
+        asin_keyword_df =load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
+        keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()
+
+        df_scrapped = load_static_file_from_s3(folder, static_file_name).compute()
+        df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
+        df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
+
+        # Load dynamic files with latest dates
+        merged_data_delayed = delayed(load_latest_csv_from_s3(folder, 'merged_data_'))
+        merged_data_df = dd.from_delayed([merged_data_delayed])
+        merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
+        merged_data_df['asin'] = merged_data_df['asin'].str.upper()
+        merged_data_df['ASIN'] = merged_data_df['asin']
+        # Apply missing brand logic using Dask's `where` and `map_partitions`:
+        missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
+        merged_data_df['brand'] = merged_data_df['brand'].where(~missing_brand_mask, 
                                                              merged_data_df['product_title'].map_partitions(
                                                              lambda df: df.apply(extract_brand_from_title))
                                                             )
 
-    merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
-    merged_data_df = dd.merge(df_scrapped_cleaned ,merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
+        merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
+        merged_data_df = dd.merge(df_scrapped_cleaned ,merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
 
-    # Load price data specific to the brand
-    price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
-    price_data_df = dd.from_delayed([price_data_delayed])
+        # Load price data specific to the brand
+        price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
+        price_data_df = dd.from_delayed([price_data_delayed])
 
-    # Parse dictionary columns in parallel with map_partitions
-    for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-        merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
-
-    return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
-
-# Brand-specific transformations
-def brand_specific_transformations(merged_data_df):
-    if brand_selection == "NAPQUEEN":
-        # NAPQUEEN-specific processing in parallel
+        # Parse dictionary columns in parallel with map_partitions
+        for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
+             merged_data_df[col] = merged_data_df[col].map_partitions(lambda df: df.apply(parse_dict_str))
+        
         merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_style))
         merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_size))
 
@@ -375,16 +398,14 @@ def brand_specific_transformations(merged_data_df):
         merged_data_df = merged_data_df.merge(dd.from_pandas(reference_df, npartitions=1), on='Product Dimensions', how='left', suffixes=('', '_ref'))
         merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
         merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
+        
+        # Compute both DataFrames after all transformations are applied
+        merged_data_df = merged_data_df.compute()
+        price_data_df = price_data_df.compute()
 
-    return merged_data_df
-
-# Call the load_and_preprocess_data and apply brand-specific transformations
+        return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
+    
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
-merged_data_df = brand_specific_transformations(merged_data_df)
-
-# Compute both DataFrames after all transformations are applied
-merged_data_df = merged_data_df.compute()
-price_data_df = price_data_df.compute()
 
 # Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:

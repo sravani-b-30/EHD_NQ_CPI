@@ -402,6 +402,11 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     if 'ads_date_ref' in price_data_df.columns:
         price_data_df['ads_date_ref'] = dd.to_datetime(price_data_df['ads_date_ref'], errors='coerce')
 
+    merged_data_df = merged_data_df.map_partitions(parse_product_details)
+    merged_data_df = merged_data_df.map_partitions(parse_glance_icon_details)
+    merged_data_df = merged_data_df.map_partitions(parse_option)
+    merged_data_df = merged_data_df.map_partitions(parse_drop_down)
+
     return asin_keyword_df.compute(), keyword_id_df.compute(), merged_data_df , price_data_df.compute()
 
 # Call the load_and_preprocess_data with specific folder and file names based on brand selection
@@ -410,15 +415,6 @@ asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preproc
 # Conditionally compute merged_data_df if EUROPEAN_HOME_DESIGNS is selected
 if brand_selection == "EUROPEAN_HOME_DESIGNS":
     merged_data_df = merged_data_df.compute()  
-
-    merged_data_df['Product Details'] = merged_data_df['Product Details'].map_partitions(parse_product_details)
-    merged_data_df['Product Details'] = merged_data_df['Product Details'].compute()
-    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].map_partitions(parse_glance_icon_details)
-    merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].compute()
-    merged_data_df['Option'] = merged_data_df['Option'].map_partitions(parse_option)
-    merged_data_df['Option'] = merged_data_df['Option'].compute()
-    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].map_partitions(parse_drop_down)
-    merged_data_df['Drop Down'] = merged_data_df['Drop Down'].compute()
     
     st.write(merged_data_df[['Product Details']].head())
 

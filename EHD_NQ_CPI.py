@@ -441,29 +441,16 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the function
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
-# Check if brand selection has changed
-if 'previous_brand_selection' not in st.session_state:
-    st.session_state['previous_brand_selection'] = brand_selection  # Initialize the previous brand selection
-
-# If the brand has changed, reset the session state for relevant data
 if st.session_state['previous_brand_selection'] != brand_selection:
-    # Clear relevant session state variables (dataframes, cached results)
-    st.session_state.clear()  # Clears all session state, or you can selectively clear specific keys
+    # Clear only specific session state variables
+    for key in ['asin_keyword_df', 'keyword_id_df', 'merged_data_df', 'price_data_df']:
+        if key in st.session_state:
+            del st.session_state[key]
 
-    # Update the previous brand selection to the newly selected brand
+    # Update brand selection and reload data
     st.session_state['previous_brand_selection'] = brand_selection
-
-    # Reload the data for the newly selected brand
     asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
-    
-    st.success(f"Switched to {brand_selection}. Data has been reloaded.")
-else:
-    # If brand hasn't changed, just use the existing session state data
-    asin_keyword_df = st.session_state.get('asin_keyword_df', None)
-    keyword_id_df = st.session_state.get('keyword_id_df', None)
-    merged_data_df = st.session_state.get('merged_data_df', None)
-    price_data_df = st.session_state.get('price_data_df', None)
-    
+
 # Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:
     st.session_state['show_features_df'] = merged_data_df

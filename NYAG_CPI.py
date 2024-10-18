@@ -316,7 +316,7 @@ def load_and_preprocess_data():
     merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
     #merged_data_df = pd.merge(df_scrapped_cleaned, merged_data_df[['asin', 'brand' , 'product_title', 'price', 'date']], left_on='ASIN', right_on='asin', how='left')
     # Debugging: Check merged_data_df after renaming and modifying 'asin'
-    #st.write("Loaded merged_data_df with latest date (dynamic):", merged_data_df.head())
+    st.write("Loaded merged_data_df with latest date (dynamic):", merged_data_df.head())
     
     #price_data_df = load_latest_csv_from_s3('ehd_price_data')
     
@@ -548,19 +548,19 @@ def run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
     date = merged_data_df['date'].max().strftime('%Y-%m-%d')
     competitor_details_df['date'] = date
 
-    # Display competitor details in Streamlit
-    st.write("Competitor Details:")
-    st.dataframe(competitor_details_df)
+    # # Display competitor details in Streamlit
+    # st.write("Competitor Details:")
+    # st.dataframe(competitor_details_df)
 
-    competitor_csv = competitor_details_df.to_csv(index=False)
+    # competitor_csv = competitor_details_df.to_csv(index=False)
     
-    st.download_button(
-        label=f"Download Competitor Details for {asin}",
-        data=competitor_csv,
-        file_name=f"{asin}_competitor_details_{date}.csv",
-        mime='text/csv',
-        key=f"download_button_{asin}_{date}"  # Ensure this key is unique
-    )
+    # st.download_button(
+    #     label=f"Download Competitor Details for {asin}",
+    #     data=competitor_csv,
+    #     file_name=f"{asin}_competitor_details_{date}.csv",
+    #     mime='text/csv',
+    #     key=f"download_button_{asin}_{date}"  # Ensure this key is unique
+    # )
 
     return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, competitor_details_df, cpi_score_dynamic
 
@@ -618,6 +618,25 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     #sizes = [p[7].get('Size', 'N/A') for p in similar_products]
     #styles = [p[7].get('Style', 'N/A') for p in similar_products]
     
+    # Create DataFrame for competitors in scatter plot
+    scatter_competitors_df = pd.DataFrame(similar_products, columns=[
+        'ASIN', 'Title', 'Price', 'Weighted Score', 'Details Score', 
+        'Title Score', 'Description Score', 'Product Details', 
+        'Details Comparison', 'Title Comparison', 'Description Comparison', 'Brand'
+    ])
+    
+    # Extract Product Dimension and Matching Features
+    scatter_competitors_df['Product Dimension'] = scatter_competitors_df['Product Details'].apply(
+        lambda details: details.get('Product Dimensions', 'N/A'))
+    
+    # Add matching compulsory features
+    scatter_competitors_df['Matching Features'] = scatter_competitors_df['Product Details'].apply(
+        lambda details: {feature: details.get(feature, 'N/A') for feature in compulsory_features}
+    )
+
+    # Filter the dataframe to include only the required columns
+    scatter_competitors_df = scatter_competitors_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
+
     # Plot using Plotly
     fig = go.Figure()
 
@@ -676,6 +695,19 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.subheader("Product Comparison Details")
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
+
+    # Save the competitor DataFrame as a CSV
+    scatter_competitors_filename = f"scatter_competitors_{asin}.csv"
+    scatter_competitors_df.to_csv(scatter_competitors_filename, index=False)
+
+    # Download button for competitor products in scatter plot
+    with open(scatter_competitors_filename, 'rb') as file:
+        st.download_button(
+            label="Download Competitor Details from Scatter Plot Analysis",
+            data=file,
+            file_name=scatter_competitors_filename,
+            mime='text/csv'
+        )
     
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)

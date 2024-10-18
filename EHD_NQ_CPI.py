@@ -441,37 +441,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the function
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
-# Initialize 'previous_brand_selection' in session_state if it doesn't already exist
-if 'previous_brand_selection' not in st.session_state:
-    st.session_state['previous_brand_selection'] = brand_selection  # Set it to the current brand as the default
-
-# Now check if the brand selection has changed
-if st.session_state['previous_brand_selection'] != brand_selection:
-    # Clear only specific session state variables
-    for key in ['asin_keyword_df', 'keyword_id_df', 'merged_data_df', 'price_data_df']:
-        if key in st.session_state:
-            del st.session_state[key]
-
-    # Update brand selection to the newly selected brand
-    st.session_state['previous_brand_selection'] = brand_selection
-
-    # Reload the data for the newly selected brand
-    asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
-
-    # Store the loaded data in session state to cache it for further use
-    st.session_state['asin_keyword_df'] = asin_keyword_df
-    st.session_state['keyword_id_df'] = keyword_id_df
-    st.session_state['merged_data_df'] = merged_data_df
-    st.session_state['price_data_df'] = price_data_df
-
-    st.success(f"Switched to {brand_selection}. Data has been reloaded.")
-else:
-    # If the brand hasn't changed, use the existing session state data
-    asin_keyword_df = st.session_state.get('asin_keyword_df', None)
-    keyword_id_df = st.session_state.get('keyword_id_df', None)
-    merged_data_df = st.session_state.get('merged_data_df', None)
-    price_data_df = st.session_state.get('price_data_df', None)
-
 # Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:
     st.session_state['show_features_df'] = merged_data_df
@@ -1370,3 +1339,57 @@ if 'same_brand_option' not in st.session_state:
 
 if st.button("Analyze"):
     run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_max, target_price, start_date, end_date, same_brand_option, compulsory_features)
+
+# Initialize 'previous_brand_selection' in session_state if it doesn't already exist
+if 'previous_brand_selection' not in st.session_state:
+    st.session_state['previous_brand_selection'] = brand_selection  # Set it to the current brand as the default
+
+# Initialize 'previous_brand_selection' in session_state if it doesn't already exist
+if 'previous_brand_selection' not in st.session_state:
+    st.session_state['previous_brand_selection'] = brand_selection  # Set it to the current brand as the default
+
+# Now check if the brand selection has changed
+if st.session_state['previous_brand_selection'] != brand_selection:
+    # Clear only specific session state variables
+    for key in ['asin_keyword_df', 'keyword_id_df', 'merged_data_df', 'price_data_df']:
+        if key in st.session_state:
+            del st.session_state[key]
+
+    # Update brand selection to the newly selected brand
+    st.session_state['previous_brand_selection'] = brand_selection
+
+    # Reload the data for the newly selected brand
+    asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
+
+    # Check if data loaded correctly
+    if merged_data_df is not None:
+        # Store the loaded data in session state to cache it for further use
+        st.session_state['asin_keyword_df'] = asin_keyword_df
+        st.session_state['keyword_id_df'] = keyword_id_df
+        st.session_state['merged_data_df'] = merged_data_df
+        st.session_state['price_data_df'] = price_data_df
+        st.success(f"Switched to {brand_selection}. Data has been reloaded.")
+    else:
+        st.error("Failed to load merged_data_df! Please check the data source or file format.")
+else:
+    # If the brand hasn't changed, use the existing session state data
+    asin_keyword_df = st.session_state.get('asin_keyword_df', None)
+    keyword_id_df = st.session_state.get('keyword_id_df', None)
+    merged_data_df = st.session_state.get('merged_data_df', None)
+    price_data_df = st.session_state.get('price_data_df', None)
+
+
+# Ensure that merged_data_df is not None before proceeding with ASIN input and analysis
+if merged_data_df is None:
+    st.error("Merged data is not available. Please check the dataset or try again.")
+else:
+    # Check if ASIN exists in the merged_data_df
+    if 'ASIN' in merged_data_df.columns:
+        if asin in merged_data_df['ASIN'].values:
+            # Proceed with your analysis
+            st.success(f"ASIN {asin} found in the dataset.")
+        else:
+            st.error(f"ASIN {asin} not found in the dataset.")
+    else:
+        st.error("'ASIN' column not found in the dataset.")
+

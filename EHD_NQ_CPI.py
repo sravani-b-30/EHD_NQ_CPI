@@ -475,6 +475,8 @@ else:
         # If the brand hasn't changed, use the stored DataFrame
         merged_data_df = st.session_state['show_features_df']
 
+st.write("Merged Data DF:", merged_data_df)
+
 def check_compulsory_features_match(target_details, compare_details, compulsory_features):
 
     for feature in compulsory_features:
@@ -1269,8 +1271,10 @@ if st.button("Show Features"):
         st.error("ASIN not found in dataset.")
 
 # Conditionally display the product details based on the session state
-if st.session_state['show_features_clicked'] and asin in merged_data_df['ASIN'].values:
+if st.session_state['show_features_clicked'] and merged_data_df is not None and asin in merged_data_df['ASIN'].values:
     show_features(asin)
+else:
+    st.error("The data is not available or has not been loaded properly.")
 
 # Automatically display checkboxes for each product detail feature (if ASIN exists)
 compulsory_features_vars = {}

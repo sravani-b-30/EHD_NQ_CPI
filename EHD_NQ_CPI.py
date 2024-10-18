@@ -349,18 +349,18 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
             left_on='ASIN', right_on='asin', how='left'
         )
         
-        #merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
-        #merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
-        #merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
-        #merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
+        merged_data_df = merged_data_df.compute()
+
+        merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
+        merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
+        merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
+        merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
 
         # Parse dictionary columns
-        for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            merged_data_df[col] = merged_data_df[col].map_partitions(
-                lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
-            )
-
-        merged_data_df = merged_data_df.compute()
+        #for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
+            #merged_data_df[col] = merged_data_df[col].map_partitions(
+                #lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
+            #)
 
         price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
 

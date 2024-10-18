@@ -549,18 +549,18 @@ def run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
     competitor_details_df['date'] = date
 
     # Display competitor details in Streamlit
-    #st.write("Competitor Details:")
-    #st.dataframe(competitor_details_df)
+    st.write("Competitor Details:")
+    st.dataframe(competitor_details_df)
 
-    #competitor_csv = competitor_details_df.to_csv(index=False)
+    competitor_csv = competitor_details_df.to_csv(index=False)
     
-    #st.download_button(
-        #label=f"Download Competitor Details for {asin}",
-        #data=competitor_csv,
-        #file_name=f"{asin}_competitor_details_{date}.csv",
-        #mime='text/csv',
-        #key=f"download_button_{asin}_{date}"  # Ensure this key is unique
-    #)
+    st.download_button(
+        label=f"Download Competitor Details for {asin}",
+        data=competitor_csv,
+        file_name=f"{asin}_competitor_details_{date}.csv",
+        mime='text/csv',
+        key=f"download_button_{asin}_{date}"  # Ensure this key is unique
+    )
 
     return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, competitor_details_df, cpi_score_dynamic
 
@@ -731,9 +731,9 @@ if 'recompute' not in st.session_state:
     st.session_state['recompute'] = False
 
 #def process_date(merged_data_df, asin, date_str, price_min, price_max, compulsory_features, same_brand_option, compulsory_keywords):
-    """
-    This function processes data for a single date and returns the results.
-    """
+    # """
+    # This function processes data for a single date and returns the results.
+    # """
     #df_combined = merged_data_df.copy()
     #df_combined['date'] = pd.to_datetime(df_combined['date'], format='%Y-%m-%d')
     #df_current_day = df_combined[df_combined['date'] == date_str]

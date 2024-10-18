@@ -475,7 +475,7 @@ else:
         # If the brand hasn't changed, use the stored DataFrame
         merged_data_df = st.session_state['show_features_df']
 
-st.write("Merged Data DF:", merged_data_df)
+st.write("Merged Data DF:", merged_data_df.head())
 
 def check_compulsory_features_match(target_details, compare_details, compulsory_features):
 

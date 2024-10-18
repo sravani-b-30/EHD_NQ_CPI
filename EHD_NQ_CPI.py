@@ -458,10 +458,22 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
 # Use session state to store the DataFrame and ensure it's available across sessions
+#if 'show_features_df' not in st.session_state:
+    #st.session_state['show_features_df'] = merged_data_df
+#else:
+   #merged_data_df = st.session_state['show_features_df']
+
+# Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:
     st.session_state['show_features_df'] = merged_data_df
 else:
-    merged_data_df = st.session_state['show_features_df']
+    # Check if the brand has changed, and if so, update the stored DataFrame
+    if st.session_state['prev_selected_brand'] != brand_selection:
+        st.session_state['show_features_df'] = merged_data_df  # Update to the latest merged_data_df
+        st.session_state['prev_selected_brand'] = brand_selection  # Update the selected brand in session state
+    else:
+        # If the brand hasn't changed, use the stored DataFrame
+        merged_data_df = st.session_state['show_features_df']
 
 def check_compulsory_features_match(target_details, compare_details, compulsory_features):
 

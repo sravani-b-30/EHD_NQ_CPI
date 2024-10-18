@@ -989,7 +989,7 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
             )
     else:
         st.write("No competitor data available for the selected date range.")
-        
+
 def plot_competitor_vs_null_analysis(competitor_count_per_day, null_price_count_per_day, start_date, end_date):
     dates = pd.date_range(start=start_date, end=end_date)
 
@@ -1152,6 +1152,7 @@ def run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_ma
            perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords)
 
     else:
+         perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords)
          st.write("No specific brand selected. Please choose either 'NAPQUEEN' or 'EUROPEAN_HOME_DESIGNS' for analysis.")
 
 # Load data globally before starting the Streamlit app

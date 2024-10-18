@@ -330,9 +330,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         merged_data_df['asin'] = merged_data_df['asin'].str.upper()
         merged_data_df['ASIN'] = merged_data_df['asin']
         
-        #missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-        #merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-
         # Define a function to fill missing brands
         def fill_missing_brand(df):
             missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
@@ -356,12 +353,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
         merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
 
-        # Parse dictionary columns
-        #for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            #merged_data_df[col] = merged_data_df[col].map_partitions(
-                #lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
-            #)
-
         price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
 
         return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
@@ -369,65 +360,50 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
     else:  # NAPQUEEN with Dask
         asin_keyword_df = load_latest_csv_from_s3(folder, 'asin_keyword_id_mapping').compute()
         st.write("Loaded asin_keyword_df:", asin_keyword_df.head())
+
         keyword_id_df = load_latest_csv_from_s3(folder, 'keyword_x_keyword_id').compute()
         st.write("Loaded keyword_id_df:", keyword_id_df.head())
 
         df_scrapped = load_static_file_from_s3(folder, static_file_name).compute()
         st.write("Loaded df_scrapped (NAPQUEEN.csv):", df_scrapped.head())
+
         df_scrapped['ASIN'] = df_scrapped['ASIN'].str.upper()
         df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
         # Load dynamic files with latest dates using delayed Dask tasks
-        merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_').compute()
-        #merged_data_df = dd.from_delayed([merged_data_delayed])
+        merged_data_delayed = delayed(load_latest_csv_from_s3(folder, 'merged_data_'))
+        merged_data_df = dd.from_delayed([delayed(merged_data_delayed)])
         st.write("Latest merged_data file name loaded:", merged_data_df.head())
+
         merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
         merged_data_df['asin'] = merged_data_df['asin'].str.upper()
         merged_data_df['ASIN'] = merged_data_df['asin']
 
-        # Apply missing brand logic
         #missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-        #merged_data_df['brand'] = merged_data_df['brand'].where(
-            #~missing_brand_mask,
-            #merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_brand_from_title))
-        #)
+        #merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+        # Define a function to fill missing brands
 
-        #merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
-        #merged_data_df = dd.merge(
-            #df_scrapped_cleaned,
-            #merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']],
-            #left_on='ASIN', right_on='asin', how='left'
-        #)
-        
-         # Define a function to fill missing brands
-        #def fill_missing_brand(df):
-            #missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
-           # df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-            #return df
+        def fill_missing_brand(df):
+            missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
+            df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+            return df
 
         # Apply function across partitions
-        #merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
+        merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
 
-        missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
-        merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-        
-        merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
-        merged_data_df = pd.merge(
+        merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
+        merged_data_df = dd.merge(
             df_scrapped_cleaned,
             merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']],
             left_on='ASIN', right_on='asin', how='left'
         )
         
-        #merged_data_df = merged_data_df.compute()
+        merged_data_df = merged_data_df.compute()
 
         merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
         merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
         merged_data_df['Option'] = merged_data_df['Option'].apply(parse_dict_str)
         merged_data_df['Drop Down'] = merged_data_df['Drop Down'].apply(parse_dict_str)
-
-        # Load price data specific to the brand
-        #price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
-        #price_data_df = dd.from_delayed([price_data_delayed])
 
         merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
         merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
@@ -461,44 +437,7 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         st.write("Loaded price_data_df (napqueen_price_tracker):", price_data_df.head())
         
         return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
-        # Parse dictionary columns
-        #for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
-            #merged_data_df[col] = merged_data_df[col].map_partitions(
-                #lambda df: df.apply(lambda x: parse_dict_str(x) if isinstance(x, str) else x)
-            #)
-
-        # Specific transformations for NAPQUEEN
-        #merged_data_df['Style'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_style))
-        #merged_data_df['Size'] = merged_data_df['product_title'].map_partitions(lambda df: df.apply(extract_size))
-
-        # Update Product Details with Style and Size
-        #def update_product_details(row):
-            #details = row['Product Details'] if isinstance(row['Product Details'], dict) else {}
-            #details['Style'] = row['Style']
-            #details['Style'] = row['Style']
-            #details['Size'] = row['Size']
-            #return details
-
-        #merged_data_df['Product Details'] = merged_data_df.apply(update_product_details, axis=1, meta=('x', 'object'))
-
-        # Extract dimensions and fill in missing values
-        #merged_data_df['Product Dimensions'] = merged_data_df['Product Details'].map_partitions(
-            #lambda df: df.apply(lambda details: details.get('Product Dimensions', None) if isinstance(details, dict) else None)
-        #)
-
-        # Reference Data Merge
-        #reference_df = pd.read_csv('product_dimension_size_style_reference.csv')
-        #merged_data_df = merged_data_df.merge(
-            #dd.from_pandas(reference_df, npartitions=1),
-            #on='Product Dimensions', how='left', suffixes=('', '_ref')
-        #)
-        #merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
-        #merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
-
-        # Compute Dask DataFrames after transformations
-        #merged_data_df = merged_data_df.compute()
-        #price_data_df = price_data_df.compute()
-
+        
 # Call the function
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
@@ -656,15 +595,6 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
     similarities = similarities[:100]  # Limit to top 100 results
     print(len(similarities))
 
-    # Optionally, save to CSV or display in Streamlit
-    #similarities_df = pd.DataFrame(similarities, columns=[
-        #'ASIN', 'Product Title', 'Price', 'Weighted Score', 'Details Score',
-        #'Title Score', 'Description Score', 'Compare Details', 'Details Comparison',
-        #'Title Comparison', 'Description Comparison', 'Brand'
-    #])
-    #st.dataframe(similarities_df)
-    #similarities_df.to_csv('similarity_df.csv')
-
     return similarities
 
 
@@ -700,20 +630,6 @@ def run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
     competitor_details_df = competitor_details_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
     date = merged_data_df['date'].max().strftime('%Y-%m-%d')
     competitor_details_df['date'] = date
-
-    # Display competitor details in Streamlit
-    #st.write("Competitor Details:")
-    #st.dataframe(competitor_details_df)
-
-    #competitor_csv = competitor_details_df.to_csv(index=False)
-    
-    #st.download_button(
-        #label=f"Download Competitor Details for {asin}",
-        #data=competitor_csv,
-        #file_name=f"{asin}_competitor_details_{date}.csv",
-        #mime='text/csv',
-        #key=f"download_button_{asin}_{date}"  # Ensure this key is unique
-    #)
 
     return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, competitor_details_df, cpi_score_dynamic
 
@@ -768,9 +684,26 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     weighted_scores = [p[3] for p in similar_products]
     product_titles = [p[1] for p in similar_products]
     asin_list = [p[0] for p in similar_products]
-    #sizes = [p[7].get('Size', 'N/A') for p in similar_products]
-    #styles = [p[7].get('Style', 'N/A') for p in similar_products]
     
+    # Create DataFrame for competitors in scatter plot
+    scatter_competitors_df = pd.DataFrame(similar_products, columns=[
+        'ASIN', 'Title', 'Price', 'Weighted Score', 'Details Score', 
+        'Title Score', 'Description Score', 'Product Details', 
+        'Details Comparison', 'Title Comparison', 'Description Comparison', 'Brand'
+    ])
+    
+    # Extract Product Dimension and Matching Features
+    scatter_competitors_df['Product Dimension'] = scatter_competitors_df['Product Details'].apply(
+        lambda details: details.get('Product Dimensions', 'N/A'))
+    
+    # Add matching compulsory features
+    scatter_competitors_df['Matching Features'] = scatter_competitors_df['Product Details'].apply(
+        lambda details: {feature: details.get(feature, 'N/A') for feature in compulsory_features}
+    )
+
+    # Filter the dataframe to include only the required columns
+    scatter_competitors_df = scatter_competitors_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
+
     # Plot using Plotly
     fig = go.Figure()
 
@@ -829,6 +762,19 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.subheader("Product Comparison Details")
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
+
+    # Save the competitor DataFrame as a CSV
+    scatter_competitors_filename = f"scatter_competitors_{asin}.csv"
+    scatter_competitors_df.to_csv(scatter_competitors_filename, index=False)
+
+    # Download button for competitor products in scatter plot
+    with open(scatter_competitors_filename, 'rb') as file:
+        st.download_button(
+            label="Download Competitor Details from Scatter Plot Analysis",
+            data=file,
+            file_name=scatter_competitors_filename,
+            mime='text/csv'
+        )
     
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)
@@ -926,6 +872,8 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
 
     compulsory_keywords = st.session_state.get('compulsory_keywords', [])
 
+    combined_competitor_df = pd.DataFrame()
+
     # Initialize session state variables
     #if 'result_df' not in st.session_state:
      #   st.session_state['result_df'] = None
@@ -964,14 +912,19 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
                 competitor_count_per_day.append(num_competitors_found)
                 null_price_count_per_day.append(daily_null_count)
 
-                # Save competitors data to CSV immediately and store in session_state
+                # Append each day's competitor details to the combined DataFrame
                 competitor_details_df = result['competitors']
-                date_str = result['date'].strftime('%Y-%m-%d')
-                csv_filename = f"competitors_{asin}_{date_str}.csv"
-                competitor_details_df.to_csv(csv_filename, index=False)
-                st.session_state['competitor_files'][date_str] = csv_filename
+                if not competitor_details_df.empty:
+                    competitor_details_df['Date'] = result['date']  # Add date to track individual days
+                    combined_competitor_df = pd.concat([combined_competitor_df, competitor_details_df], ignore_index=True)
             
             current_date += timedelta(days=1)
+            
+            # Save the combined competitor details DataFrame as a single CSV if it has data
+        if not combined_competitor_df.empty:
+            combined_csv_filename = f"combined_competitors_{asin}_{start_date}_{end_date}.csv"
+            combined_competitor_df.to_csv(combined_csv_filename, index=False)
+            st.session_state['competitor_files']['combined'] = combined_csv_filename
 
             # Create result DataFrame and store in session state
             result_df = pd.DataFrame(all_results,
@@ -1011,7 +964,7 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
         result_df = pd.merge(result_df, napqueen_df[['Date', 'ASIN', 'ad_spend', 'orderedunits']], on=['Date', 'ASIN'], how='left')
 
         st.success("Merging successful! Displaying the merged dataframe:")
-        #st.dataframe(result_df)
+        st.dataframe(result_df)
 
     except KeyError as e:
         st.error(f"KeyError: {e} - Likely missing columns during merging.")
@@ -1022,17 +975,21 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
     st.subheader("Time-Series Analysis Results")
     plot_results(result_df, asin_list, start_date, end_date)
 
-    # Now, display each CSV file for the respective dates one by one
-    st.subheader("Competitor Data for Each Day")
-    for date_str, csv_filename in st.session_state['competitor_files'].items():
-        st.write(f"Competitor Data for {date_str}")
-        try:
-            # Load and display the CSV file for this date
-            competitor_data = pd.read_csv(csv_filename)
-            st.dataframe(competitor_data)
-        except Exception as e:
-            st.error(f"Error loading file for {date_str}: {e}")
+    if not combined_competitor_df.empty:
+        st.subheader("Combined Competitor Data for Selected Date Range")
+        st.dataframe(combined_competitor_df)
 
+        # Download button for the combined CSV
+        with open(combined_csv_filename, 'rb') as file:
+            st.download_button(
+                label=f"Download Combined Competitor Details for {asin}",
+                data=file,
+                file_name=combined_csv_filename,
+                mime='text/csv'
+            )
+    else:
+        st.write("No competitor data available for the selected date range.")
+        
 def plot_competitor_vs_null_analysis(competitor_count_per_day, null_price_count_per_day, start_date, end_date):
     dates = pd.date_range(start=start_date, end=end_date)
 

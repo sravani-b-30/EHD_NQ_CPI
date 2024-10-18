@@ -441,15 +441,36 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
 # Call the function
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
 
+# Initialize 'previous_brand_selection' in session_state if it doesn't already exist
+if 'previous_brand_selection' not in st.session_state:
+    st.session_state['previous_brand_selection'] = brand_selection  # Set it to the current brand as the default
+
+# Now check if the brand selection has changed
 if st.session_state['previous_brand_selection'] != brand_selection:
     # Clear only specific session state variables
     for key in ['asin_keyword_df', 'keyword_id_df', 'merged_data_df', 'price_data_df']:
         if key in st.session_state:
             del st.session_state[key]
 
-    # Update brand selection and reload data
+    # Update brand selection to the newly selected brand
     st.session_state['previous_brand_selection'] = brand_selection
+
+    # Reload the data for the newly selected brand
     asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)
+
+    # Store the loaded data in session state to cache it for further use
+    st.session_state['asin_keyword_df'] = asin_keyword_df
+    st.session_state['keyword_id_df'] = keyword_id_df
+    st.session_state['merged_data_df'] = merged_data_df
+    st.session_state['price_data_df'] = price_data_df
+
+    st.success(f"Switched to {brand_selection}. Data has been reloaded.")
+else:
+    # If the brand hasn't changed, use the existing session state data
+    asin_keyword_df = st.session_state.get('asin_keyword_df', None)
+    keyword_id_df = st.session_state.get('keyword_id_df', None)
+    merged_data_df = st.session_state.get('merged_data_df', None)
+    price_data_df = st.session_state.get('price_data_df', None)
 
 # Use session state to store the DataFrame and ensure it's available across sessions
 if 'show_features_df' not in st.session_state:

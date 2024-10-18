@@ -994,7 +994,7 @@ def calculate_and_plot_cpi(merged_data_df, price_data_df, asin_list, start_date,
     if brand_selection == "EUROPEAN_HOME_DESIGNS":
         napqueen_df = napqueen_df.rename(columns={'asin': 'ASIN', 'orderedunits_m': 'orderedunits'})
     else:
-         napqueen_df = napqueen_df.rename(columns={'asin': 'ASIN'})
+         napqueen_df = napqueen_df.rename(columns={'asin': 'ASIN', 'date': 'Date'})
 
     result_df['ASIN'] = result_df['ASIN'].str.upper().str.strip()  
     napqueen_df['ASIN'] = napqueen_df['ASIN'].str.upper().str.strip()

@@ -378,8 +378,8 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         df_scrapped_cleaned = df_scrapped.drop_duplicates(subset='ASIN')
 
         # Load dynamic files with latest dates using delayed Dask tasks
-        merged_data_delayed = delayed(load_latest_csv_from_s3(folder, 'merged_data_'))
-        merged_data_df = dd.from_delayed([merged_data_delayed])
+        merged_data_df = load_latest_csv_from_s3(folder, 'merged_data_').compute()
+        #merged_data_df = dd.from_delayed([merged_data_delayed])
         st.write("Latest merged_data file name loaded:", merged_data_df.head())
         merged_data_df = merged_data_df.rename(columns={"ASIN": "asin", "title": "product_title"})
         merged_data_df['asin'] = merged_data_df['asin'].str.upper()
@@ -400,22 +400,25 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         #)
         
          # Define a function to fill missing brands
-        def fill_missing_brand(df):
-            missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
-            df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
-            return df
+        #def fill_missing_brand(df):
+            #missing_brand_mask = df['brand'].isna() | (df['brand'] == "")
+           # df.loc[missing_brand_mask, 'brand'] = df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+            #return df
 
         # Apply function across partitions
-        merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
+        #merged_data_df = merged_data_df.map_partitions(fill_missing_brand)
 
-        merged_data_df['price'] = dd.to_numeric(merged_data_df['price'], errors='coerce')
-        merged_data_df = dd.merge(
+        missing_brand_mask = merged_data_df['brand'].isna() | (merged_data_df['brand'] == "")
+        merged_data_df.loc[missing_brand_mask, 'brand'] = merged_data_df.loc[missing_brand_mask, 'product_title'].apply(extract_brand_from_title)
+        
+        merged_data_df['price'] = pd.to_numeric(merged_data_df['price'], errors='coerce')
+        merged_data_df = pd.merge(
             df_scrapped_cleaned,
             merged_data_df[['asin', 'brand', 'product_title', 'price', 'date']],
             left_on='ASIN', right_on='asin', how='left'
         )
         
-        merged_data_df = merged_data_df.compute()
+        #merged_data_df = merged_data_df.compute()
 
         merged_data_df['Product Details'] = merged_data_df['Product Details'].apply(parse_dict_str)
         merged_data_df['Glance Icon Details'] = merged_data_df['Glance Icon Details'].apply(parse_dict_str)
@@ -425,8 +428,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         # Load price data specific to the brand
         #price_data_delayed = delayed(load_latest_csv_from_s3(folder, price_data_prefix))
         #price_data_df = dd.from_delayed([price_data_delayed])
-        
-        price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
 
         merged_data_df['Style'] = merged_data_df['product_title'].apply(extract_style)
         merged_data_df['Size'] = merged_data_df['product_title'].apply(extract_size)
@@ -455,8 +456,11 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         # Fill missing values in 'Size' and 'Style' columns with the values from the reference DataFrame
         merged_data_df['Size'] = merged_data_df['Size'].fillna(merged_data_df['Size_ref'])
         merged_data_df['Style'] = merged_data_df['Style'].fillna(merged_data_df['Style_ref'])
-
-
+        
+        price_data_df = load_latest_csv_from_s3(folder, price_data_prefix).compute()
+        st.write("Loaded price_data_df (napqueen_price_tracker):", price_data_df.head())
+        
+        return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
         # Parse dictionary columns
         #for col in ['Product Details', 'Glance Icon Details', 'Option', 'Drop Down']:
             #merged_data_df[col] = merged_data_df[col].map_partitions(
@@ -494,8 +498,6 @@ def load_and_preprocess_data(folder, static_file_name, price_data_prefix):
         # Compute Dask DataFrames after transformations
         #merged_data_df = merged_data_df.compute()
         #price_data_df = price_data_df.compute()
-
-        return asin_keyword_df, keyword_id_df, merged_data_df, price_data_df
 
 # Call the function
 asin_keyword_df, keyword_id_df, merged_data_df, price_data_df = load_and_preprocess_data(s3_folder, static_file_name, price_data_prefix)

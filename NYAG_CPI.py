@@ -292,7 +292,7 @@ def load_latest_csv_from_s3(prefix):
     obj = s3_client.get_object(Bucket=bucket_name, Key=latest_file_key)
     return pd.read_csv(obj['Body'], low_memory=False)
 
-@st.cache_data
+@st.cache_resource
 def load_and_preprocess_data():
     asin_keyword_df = load_latest_csv_from_s3('asin_keyword_id_mapping')
     keyword_id_df = load_latest_csv_from_s3('keyword_x_keyword_id')

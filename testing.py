@@ -23,7 +23,10 @@ import json
 
 nltk.download('punkt', quiet=True)
 
-
+# Store analysis results in session state
+if 'analysis_results' not in st.session_state:
+    st.session_state['analysis_results'] = None  # Initialize empty
+    
 def format_details(details):
     return "\n".join([f"{key}: {value}" for key, value in details.items()])
 
@@ -1396,10 +1399,6 @@ if 'compulsory_features' not in st.session_state:
     st.session_state['compulsory_features'] = compulsory_features
 if 'same_brand_option' not in st.session_state:
     st.session_state['same_brand_option'] = same_brand_option
-
-# Store analysis results in session state
-if 'analysis_results' not in st.session_state:
-    st.session_state['analysis_results'] = None  # Initialize empty
 
 if st.button("Analyze"):
         # Perform the analysis only if the button is clicked

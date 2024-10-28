@@ -23,9 +23,6 @@ import json
 
 nltk.download('punkt', quiet=True)
 
-# Store analysis results in session state
-if 'analysis_results' not in st.session_state:
-    st.session_state['analysis_results'] = None  # Initialize empty
 
 def format_details(details):
     return "\n".join([f"{key}: {value}" for key, value in details.items()])
@@ -787,11 +784,9 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
 
-    if 'analysis_results' in st.session_state and st.session_state['analysis_results'] is not None:
+    # Display the analysis results if they exist in session state
+    if st.session_state['analysis_results']:
         asin, target_price, cpi_score, num_competitors, size, product_dimension, prices, competitors_df, dynamic_cpi_score = st.session_state['analysis_results']
-    
-    if 'analysis_results' in st.session_state and st.session_state['analysis_results'] is not None:
-        scatter_competitors_df = st.session_state['analysis_results']
 
     # Save the competitor DataFrame as a CSV
     scatter_competitors_filename = f"scatter_competitors_{asin}.csv"
@@ -1137,12 +1132,6 @@ def run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_ma
     st.session_state['selected_keyword_ids'] = get_selected_keyword_ids()
     compulsory_keywords = st.session_state.get('compulsory_keywords', [])
     non_compulsory_keywords = st.session_state.get('non_compulsory_keywords', [])
-
-    result = run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
-                          same_brand_option, merged_data_df, [], [])  # Run your analysis logic
-
-    # Save the results in session state to persist across re-runs
-    st.session_state['analysis_results'] = result
     
     merged_data_df['date'] = pd.to_datetime(merged_data_df['date'], errors='coerce')
     df_recent = merged_data_df[merged_data_df['date'] == merged_data_df['date'].max()]
@@ -1407,6 +1396,10 @@ if 'compulsory_features' not in st.session_state:
     st.session_state['compulsory_features'] = compulsory_features
 if 'same_brand_option' not in st.session_state:
     st.session_state['same_brand_option'] = same_brand_option
+
+# Store analysis results in session state
+if 'analysis_results' not in st.session_state:
+    st.session_state['analysis_results'] = None  # Initialize empty
 
 if st.button("Analyze"):
         # Perform the analysis only if the button is clicked

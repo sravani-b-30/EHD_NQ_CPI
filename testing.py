@@ -19,6 +19,7 @@ import dask.dataframe as dd
 from dask import delayed
 import io
 import json
+import csv
 
 
 nltk.download('punkt', quiet=True)
@@ -556,11 +557,15 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         if weighted_score > 0:
                             #st.write(f"Tuple data: {(asin, row['product_title'], row['price'], weighted_score, details_score, title_score, desc_score, compare_details, details_comparison, title_comparison, desc_comparison, compare_brand)}")
                             #st.write(f"Tuple length: {len((asin, row['product_title'], row['price'], weighted_score, details_score, title_score, desc_score, compare_details, details_comparison, title_comparison, desc_comparison, compare_brand))}")
-
+                            matching_features = []
+                            for feature in compulsory_features:
+                                if feature in target_details and feature in compare_details:
+                                    if target_details[feature] == compare_details[feature]:
+                                        matching_features.append(feature)
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
-                                 desc_comparison, compare_brand)
+                                 desc_comparison, compare_brand, matching_features)
                             )
                         unique_asins.add(asin)
                         seen_combinations.add(combination)
@@ -575,10 +580,15 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         )
                         weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
                         if weighted_score > 0:
+                            matching_features = []
+                            for feature in compulsory_features:
+                                if feature in target_details and feature in compare_details:
+                                    if target_details[feature] == compare_details[feature]:
+                                        matching_features.append(feature)
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
-                                 desc_comparison, compare_brand)
+                                 desc_comparison, compare_brand, matching_features)
                             )
                         unique_asins.add(asin)
                         seen_combinations.add(combination)
@@ -593,10 +603,15 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         )
                         weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
                         if weighted_score > 0:
+                            matching_features = []
+                            for feature in compulsory_features:
+                                if feature in target_details and feature in compare_details:
+                                    if target_details[feature] == compare_details[feature]:
+                                        matching_features.append(feature)
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
-                                 desc_comparison, compare_brand)
+                                 desc_comparison, compare_brand, matching_features)
                             )
                         unique_asins.add(asin)
                         seen_combinations.add(combination)
@@ -682,6 +697,19 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     product_titles = [p[1] for p in similar_products]
     asin_list = [p[0] for p in similar_products]
 
+    st.session_state['competitors_data'] = [
+    {
+        "ASIN": product[0],
+        "Title": product[1],
+        "Price": product[2],
+        "Product Dimension": product[7].get('Product Dimensions', ''),
+        "Brand": product[10],
+        "Matching Features": ", ".join(product[11])  # joining matched features as a string
+    }
+    for product in similar_products
+    ]
+
+
     # Plot using Plotly
     fig = go.Figure()
 
@@ -740,6 +768,22 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.subheader("Product Comparison Details")
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
+
+    if 'competitors_data' in st.session_state:
+        # Prepare the data for CSV
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
+        writer.writeheader()
+        writer.writerows(st.session_state['competitors_data'])
+        csv_data = output.getvalue().encode('utf-8')
+
+    # Display download button
+    st.download_button(
+        label="Download Competitor Analysis CSV",
+        data=csv_data,
+        file_name="competitors_analysis.csv",
+        mime="text/csv",
+    )
 
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)

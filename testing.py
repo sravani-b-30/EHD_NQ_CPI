@@ -801,9 +801,9 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
 
-    # Display the analysis results if they exist in session state
-    if st.session_state['analysis_results']:
-        asin, target_price, cpi_score, num_competitors, size, product_dimension, prices, competitors_df, dynamic_cpi_score = st.session_state['analysis_results']
+    # # Display the analysis results if they exist in session state
+    # if st.session_state['analysis_results']:
+    #     asin, target_price, cpi_score, num_competitors, size, product_dimension, prices, competitors_df, dynamic_cpi_score = st.session_state['analysis_results']
 
     # Save the competitor DataFrame as a CSV
     # scatter_competitors_filename = f"scatter_competitors_{asin}.csv"

@@ -790,7 +790,7 @@ def upload_competitor_data_to_s3(competitors_data, asin):
     
     return presigned_url
 
-def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords, generate_csv=False):
+def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords, generate_csv=True):
     # Find similar products
     similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords, non_compulsory_keywords)
 

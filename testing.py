@@ -935,6 +935,10 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
         download_link = upload_competitor_data_to_s3(competitors_data, asin)
         st.session_state['csv_download_link'] = download_link
 
+    # Display CSV download link if available
+    if 'csv_download_link' in st.session_state:
+        st.markdown(f"[Download Competitor Analysis CSV]({st.session_state['csv_download_link']})")
+
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)
     cpi_score = calculate_cpi_score(target_price, competitor_prices)
@@ -1532,6 +1536,3 @@ if 'same_brand_option' not in st.session_state:
 
 if st.button("Analyze"):
     run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_max, target_price, start_date, end_date, same_brand_option, compulsory_features)
-# Display CSV download link if available
-if 'csv_download_link' in st.session_state:
-    st.markdown(f"[Download Competitor Analysis CSV]({st.session_state['csv_download_link']})")

@@ -679,11 +679,11 @@ def run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
     product_dimension = target_product['Product Details'].get('Product Dimensions', 'N/A')
 
     # Filter the dataframe to include only the required columns
-    competitor_details_df = competitor_details_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
-    date = merged_data_df['date'].max().strftime('%Y-%m-%d')
-    competitor_details_df['date'] = date
+    #competitor_details_df = competitor_details_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
+    #date = merged_data_df['date'].max().strftime('%Y-%m-%d')
+    #competitor_details_df['date'] = date
 
-    return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, competitor_details_df, cpi_score_dynamic
+    return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, cpi_score_dynamic
 
 
 def show_features(asin):

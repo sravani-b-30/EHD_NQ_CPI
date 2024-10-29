@@ -642,20 +642,20 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
                                  desc_comparison, compare_brand, matching_features)
                             )
-                            st.write("Debugging `similarities` tuple structure:")
-                            st.write(f"ASIN (index 0): {similarities[-1][0]}")
-                            st.write(f"Title (index 1): {similarities[-1][1]}")
-                            st.write(f"Price (index 2): {similarities[-1][2]}")
-                            st.write(f"Weighted Score (index 3): {similarities[-1][3]}")
-                            st.write(f"Details Score (index 4): {similarities[-1][4]}")
-                            st.write(f"Title Score (index 5): {similarities[-1][5]}")
-                            st.write(f"Description Score (index 6): {similarities[-1][6]}")
-                            st.write(f"Product Details (index 7): {similarities[-1][7]}")
-                            st.write(f"Details Comparison (index 8): {similarities[-1][8]}")
-                            st.write(f"Title Comparison (index 9): {similarities[-1][9]}")
-                            st.write(f"Description Comparison (index 10): {similarities[-1][10]}")
-                            st.write(f"Brand (index 11): {similarities[-1][11]}")
-                            st.write(f"Matching Features (index 12): {similarities[-1][12]}")
+                            # st.write("Debugging `similarities` tuple structure:")
+                            # st.write(f"ASIN (index 0): {similarities[-1][0]}")
+                            # st.write(f"Title (index 1): {similarities[-1][1]}")
+                            # st.write(f"Price (index 2): {similarities[-1][2]}")
+                            # st.write(f"Weighted Score (index 3): {similarities[-1][3]}")
+                            # st.write(f"Details Score (index 4): {similarities[-1][4]}")
+                            # st.write(f"Title Score (index 5): {similarities[-1][5]}")
+                            # st.write(f"Description Score (index 6): {similarities[-1][6]}")
+                            # st.write(f"Product Details (index 7): {similarities[-1][7]}")
+                            # st.write(f"Details Comparison (index 8): {similarities[-1][8]}")
+                            # st.write(f"Title Comparison (index 9): {similarities[-1][9]}")
+                            # st.write(f"Description Comparison (index 10): {similarities[-1][10]}")
+                            # st.write(f"Brand (index 11): {similarities[-1][11]}")
+                            # st.write(f"Matching Features (index 12): {similarities[-1][12]}")
                         unique_asins.add(asin)
                         seen_combinations.add(combination)
 
@@ -746,8 +746,8 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
         "Title": product[1],
         "Price": product[2],
         "Product Dimension": product[7].get('Product Dimensions', ''),
-        "Brand": product[11],
-        "Matching Features": str(product[12])  # joining matched features as a string
+        "Brand": product[11] if len(product) > 11 else "Unknown",  # Safeguard for Brand
+        "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"  # Safeguard for Matching Features
     }
     for product in similar_products
     ]

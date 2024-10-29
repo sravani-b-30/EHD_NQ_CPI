@@ -706,10 +706,8 @@ def show_features(asin):
 
     return product_details
 
-
-def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
-    
-
+@st.cache_data
+def generate_competitor_data(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
     # Find similar products
     similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords, non_compulsory_keywords)
 
@@ -734,25 +732,57 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     # Ensure the target product is not included in the similar products list
     similar_products = [prod for prod in similar_products if prod[0] != asin]
     similar_products.insert(0, target_product_entry)
+ 
+    # Prepare the competitors data in the required format
+    competitors_data = [
+        {
+            "ASIN": product[0],
+            "Title": product[1],
+            "Price": product[2],
+            "Product Dimension": product[7].get('Product Dimensions', ''),
+            "Brand": product[11],
+            "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"
+        }
+        for product in similar_products
+    ]
 
+    return competitors_data, similar_products, target_product
+
+def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
+    
+    # Check if analysis data is already in session state
+    if 'competitors_data' not in st.session_state:
+        # Generate and cache analysis data if not present
+        competitors_data, similar_products, target_product = generate_competitor_data(
+            asin, target_price, price_min, price_max, compulsory_features, same_brand_option,
+            merged_data_df, compulsory_keywords, non_compulsory_keywords
+        )
+        st.session_state['competitors_data'] = competitors_data
+        st.session_state['similar_products'] = similar_products
+        st.session_state['target_product'] = target_product
+    else:
+        # Retrieve cached data from session state
+        competitors_data = st.session_state['competitors_data']
+        similar_products = st.session_state['similar_products']
+        target_product = st.session_state['target_product']
+    
     # Extract price and weighted scores from similar products
     prices = [p[2] for p in similar_products]
     weighted_scores = [p[3] for p in similar_products]
     product_titles = [p[1] for p in similar_products]
     asin_list = [p[0] for p in similar_products]
 
-    st.session_state['competitors_data'] = [
-    {
-        "ASIN": product[0],
-        "Title": product[1],
-        "Price": product[2],
-        "Product Dimension": product[7].get('Product Dimensions', ''),
-        "Brand": product[11] if len(product) > 11 else "Unknown",  # Safeguard for Brand
-        "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"  # Safeguard for Matching Features
-    }
-    for product in similar_products
-    ]
-
+    # st.session_state['competitors_data'] = [
+    # {
+    #     "ASIN": product[0],
+    #     "Title": product[1],
+    #     "Price": product[2],
+    #     "Product Dimension": product[7].get('Product Dimensions', ''),
+    #     "Brand": product[11] if len(product) > 11 else "Unknown",  # Safeguard for Brand
+    #     "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"  # Safeguard for Matching Features
+    # }
+    # for product in similar_products
+    # ]
 
     # Plot using Plotly
     fig = go.Figure()
@@ -813,22 +843,39 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     st.write(f"**Competitor Count**: {competitor_count}")
     st.write(f"**Number of Competitors with Null Price**: {price_null_count}")
 
+    # if 'competitors_data' in st.session_state:
+    #     # Prepare the data for CSV
+    #     output = io.StringIO()
+    #     writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
+    #     writer.writeheader()
+    #     writer.writerows(st.session_state['competitors_data'])
+    #     csv_data = output.getvalue().encode('utf-8')
+
+    # # Display download button
+    # st.download_button(
+    #     label="Download Competitor Analysis CSV",
+    #     data=csv_data,
+    #     file_name="competitors_analysis.csv",
+    #     mime="text/csv",
+    # )
+
+    # Download button for cached CSV data
     if 'competitors_data' in st.session_state:
-        # Prepare the data for CSV
+        # Prepare the CSV data for download
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
         writer.writeheader()
         writer.writerows(st.session_state['competitors_data'])
         csv_data = output.getvalue().encode('utf-8')
 
-    # Display download button
+    # Display download button outside of perform_scatter_plot to avoid re-run on click
     st.download_button(
         label="Download Competitor Analysis CSV",
         data=csv_data,
         file_name="competitors_analysis.csv",
-        mime="text/csv",
+        mime="text/csv"
     )
-
+    
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)
     cpi_score = calculate_cpi_score(target_price, competitor_prices)

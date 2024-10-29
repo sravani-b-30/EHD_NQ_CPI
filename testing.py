@@ -557,11 +557,11 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         if weighted_score > 0:
                             #st.write(f"Tuple data: {(asin, row['product_title'], row['price'], weighted_score, details_score, title_score, desc_score, compare_details, details_comparison, title_comparison, desc_comparison, compare_brand)}")
                             #st.write(f"Tuple length: {len((asin, row['product_title'], row['price'], weighted_score, details_score, title_score, desc_score, compare_details, details_comparison, title_comparison, desc_comparison, compare_brand))}")
-                            matching_features = []
+                            matching_features = {}
                             for feature in compulsory_features:
                                 if feature in target_details and feature in compare_details:
                                     if target_details[feature] == compare_details[feature]:
-                                        matching_features.append(feature)
+                                        matching_features[feature] = compare_details[feature]
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
@@ -580,11 +580,11 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         )
                         weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
                         if weighted_score > 0:
-                            matching_features = []
+                            matching_features = {}
                             for feature in compulsory_features:
                                 if feature in target_details and feature in compare_details:
                                     if target_details[feature] == compare_details[feature]:
-                                        matching_features.append(feature)
+                                        matching_features[feature] = compare_details[feature]
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
@@ -603,11 +603,11 @@ def find_similar_products(asin, price_min, price_max, merged_data_df, compulsory
                         )
                         weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
                         if weighted_score > 0:
-                            matching_features = []
+                            matching_features = {}
                             for feature in compulsory_features:
                                 if feature in target_details and feature in compare_details:
                                     if target_details[feature] == compare_details[feature]:
-                                        matching_features.append(feature)
+                                        matching_features[feature] = compare_details[feature]
                             similarities.append(
                                 (asin, row['product_title'], row['price'], weighted_score, details_score,
                                  title_score, desc_score, compare_details, details_comparison, title_comparison,
@@ -703,8 +703,8 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
         "Title": product[1],
         "Price": product[2],
         "Product Dimension": product[7].get('Product Dimensions', ''),
-        "Brand": product[10],
-        "Matching Features": ", ".join(product[11])  # joining matched features as a string
+        "Brand": product[11],
+        "Matching Features": str(product[12])  # joining matched features as a string
     }
     for product in similar_products
     ]

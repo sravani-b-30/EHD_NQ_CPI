@@ -678,12 +678,27 @@ def run_analysis(asin, price_min, price_max, target_price, compulsory_features, 
     size = target_product['Product Details'].get('Size', 'N/A')
     product_dimension = target_product['Product Details'].get('Product Dimensions', 'N/A')
 
-    # Filter the dataframe to include only the required columns
-    #competitor_details_df = competitor_details_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
-    #date = merged_data_df['date'].max().strftime('%Y-%m-%d')
-    #competitor_details_df['date'] = date
+    # Create a DataFrame to store competitor details
+    competitor_details_df = pd.DataFrame(similar_products, columns=[
+        'ASIN', 'Title', 'Price', 'Weighted Score', 'Details Score',
+        'Title Score', 'Description Score', 'Product Details',
+        'Details Comparison', 'Title Comparison', 'Description Comparison', 'Brand'
+    ])
 
-    return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, cpi_score_dynamic
+    # Extract Product Dimension and Matching Features
+    competitor_details_df['Product Dimension'] = competitor_details_df['Product Details'].apply(
+        lambda details: details.get('Product Dimensions', 'N/A'))
+    
+    # Add matching compulsory features
+    competitor_details_df['Matching Features'] = competitor_details_df['Product Details'].apply(
+        lambda details: {feature: details.get(feature, 'N/A') for feature in compulsory_features}
+    )
+    # Filter the dataframe to include only the required columns
+    competitor_details_df = competitor_details_df[['ASIN', 'Title', 'Price', 'Product Dimension', 'Brand', 'Matching Features']]
+    date = merged_data_df['date'].max().strftime('%Y-%m-%d')
+    competitor_details_df['date'] = date
+
+    return asin, target_price, cpi_score, num_competitors_found, size, product_dimension, prices, competitor_details_df, cpi_score_dynamic
 
 
 def show_features(asin):

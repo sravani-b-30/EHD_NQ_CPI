@@ -706,10 +706,78 @@ def show_features(asin):
 
     return product_details
 
-@st.cache_data
-def generate_competitor_data(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
+# @st.cache_data
+# def generate_competitor_data(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
+#     # Find similar products
+#     similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords, non_compulsory_keywords)
+
+#     # Retrieve target product information
+#     target_product = merged_data_df[merged_data_df['ASIN'] == asin].iloc[0]
+#     target_title = str(target_product['product_title']).lower()
+#     target_desc = str(target_product['Description']).lower()
+#     target_details = target_product['Product Details']
+
+#     # Calculate similarity scores for the target product
+#     details_score, title_score, desc_score, details_comparison, title_comparison, desc_comparison = calculate_similarity(
+#     target_details, target_details, target_title, target_title, target_desc, target_desc
+#     )
+#     weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
+
+#     target_product_entry = (
+#     asin, target_product['product_title'], target_price, weighted_score, details_score,
+#     title_score, desc_score, target_details, details_comparison, title_comparison, desc_comparison, target_product['brand'],
+#     {feature: target_details.get(feature, "N/A") for feature in compulsory_features}
+#     )
+
+#     # Ensure the target product is not included in the similar products list
+#     similar_products = [prod for prod in similar_products if prod[0] != asin]
+#     similar_products.insert(0, target_product_entry)
+ 
+#     # Prepare the competitors data in the required format
+#     competitors_data = [
+#         {
+#             "ASIN": product[0],
+#             "Title": product[1],
+#             "Price": product[2],
+#             "Product Dimension": product[7].get('Product Dimensions', ''),
+#             "Brand": product[11],
+#             "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"
+#         }
+#         for product in similar_products
+#     ]
+
+#     return competitors_data, similar_products, target_product
+
+s3_client = boto3.client('s3')
+bucket_name = 'anarix-cpi'
+csv_folder = 'NAPQUEEN/' 
+
+# Function to generate the competitor data CSV and upload it to S3
+def upload_competitor_data_to_s3(competitors_data, asin):
+    # Generate CSV content
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
+    writer.writeheader()
+    writer.writerows(competitors_data)
+    csv_content = output.getvalue().encode('utf-8')
+
+    # Define the S3 key (file name) for the CSV
+    s3_key = f"{csv_folder}competitors_analysis_{asin}.csv"
+    
+    # Upload the CSV to S3
+    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_content, ContentType='text/csv')
+
+    # Generate a presigned URL for downloading the file
+    presigned_url = s3_client.generate_presigned_url('get_object',
+        Params={'Bucket': bucket_name, 'Key': s3_key},
+        ExpiresIn=3600  # URL expires in 1 hour
+    )
+    
+    return presigned_url
+
+def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords, generate_csv=False):
     # Find similar products
-    similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords, non_compulsory_keywords)
+    similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords)
 
     # Retrieve target product information
     target_product = merged_data_df[merged_data_df['ASIN'] == asin].iloc[0]
@@ -719,21 +787,26 @@ def generate_competitor_data(asin, target_price, price_min, price_max, compulsor
 
     # Calculate similarity scores for the target product
     details_score, title_score, desc_score, details_comparison, title_comparison, desc_comparison = calculate_similarity(
-    target_details, target_details, target_title, target_title, target_desc, target_desc
+        target_details, target_details, target_title, target_title, target_desc, target_desc
     )
     weighted_score = calculate_weighted_score(details_score, title_score, desc_score)
-
+    
     target_product_entry = (
-    asin, target_product['product_title'], target_price, weighted_score, details_score,
-    title_score, desc_score, target_details, details_comparison, title_comparison, desc_comparison, target_product['brand'],
-    {feature: target_details.get(feature, "N/A") for feature in compulsory_features}
+        asin, target_product['product_title'], target_price, weighted_score, details_score,
+        title_score, desc_score, target_details, details_comparison, title_comparison, desc_comparison
     )
 
     # Ensure the target product is not included in the similar products list
     similar_products = [prod for prod in similar_products if prod[0] != asin]
     similar_products.insert(0, target_product_entry)
- 
-    # Prepare the competitors data in the required format
+
+    # Extract price and weighted scores from similar products
+    prices = [p[2] for p in similar_products]
+    weighted_scores = [p[3] for p in similar_products]
+    product_titles = [p[1] for p in similar_products]
+    asin_list = [p[0] for p in similar_products]
+    
+    # Prepare competitors data for CSV
     competitors_data = [
         {
             "ASIN": product[0],
@@ -745,45 +818,7 @@ def generate_competitor_data(asin, target_price, price_min, price_max, compulsor
         }
         for product in similar_products
     ]
-
-    return competitors_data, similar_products, target_product
-
-def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords):
     
-    # Check if analysis data is already in session state
-    if 'competitors_data' not in st.session_state:
-        # Generate and cache analysis data if not present
-        competitors_data, similar_products, target_product = generate_competitor_data(
-            asin, target_price, price_min, price_max, compulsory_features, same_brand_option,
-            merged_data_df, compulsory_keywords, non_compulsory_keywords
-        )
-        st.session_state['competitors_data'] = competitors_data
-        st.session_state['similar_products'] = similar_products
-        st.session_state['target_product'] = target_product
-    else:
-        # Retrieve cached data from session state
-        competitors_data = st.session_state['competitors_data']
-        similar_products = st.session_state['similar_products']
-        target_product = st.session_state['target_product']
-    
-    # Extract price and weighted scores from similar products
-    prices = [p[2] for p in similar_products]
-    weighted_scores = [p[3] for p in similar_products]
-    product_titles = [p[1] for p in similar_products]
-    asin_list = [p[0] for p in similar_products]
-
-    # st.session_state['competitors_data'] = [
-    # {
-    #     "ASIN": product[0],
-    #     "Title": product[1],
-    #     "Price": product[2],
-    #     "Product Dimension": product[7].get('Product Dimensions', ''),
-    #     "Brand": product[11] if len(product) > 11 else "Unknown",  # Safeguard for Brand
-    #     "Matching Features": str(product[12]) if len(product) > 12 else "No Matching Features"  # Safeguard for Matching Features
-    # }
-    # for product in similar_products
-    # ]
-
     # Plot using Plotly
     fig = go.Figure()
 
@@ -859,23 +894,30 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     #     mime="text/csv",
     # )
 
-    # Download button for cached CSV data
-    if 'competitors_data' in st.session_state:
-        # Prepare the CSV data for download
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
-        writer.writeheader()
-        writer.writerows(st.session_state['competitors_data'])
-        csv_data = output.getvalue().encode('utf-8')
+    # # Download button for cached CSV data
+    # if 'competitors_data' in st.session_state:
+    #     # Prepare the CSV data for download
+    #     output = io.StringIO()
+    #     writer = csv.DictWriter(output, fieldnames=["ASIN", "Title", "Price", "Product Dimension", "Brand", "Matching Features"])
+    #     writer.writeheader()
+    #     writer.writerows(st.session_state['competitors_data'])
+    #     csv_data = output.getvalue().encode('utf-8')
 
-    # Display download button outside of perform_scatter_plot to avoid re-run on click
-    st.download_button(
-        label="Download Competitor Analysis CSV",
-        data=csv_data,
-        file_name="competitors_analysis.csv",
-        mime="text/csv"
-    )
-    
+    # # Display download button outside of perform_scatter_plot to avoid re-run on click
+    # st.download_button(
+    #     label="Download Competitor Analysis CSV",
+    #     data=csv_data,
+    #     file_name="competitors_analysis.csv",
+    #     mime="text/csv"
+    # )
+    # Store competitors data in session state
+    st.session_state['competitors_data'] = competitors_data
+
+    # If user requested a CSV, upload it to S3 and provide the download link
+    if generate_csv:
+        download_link = upload_competitor_data_to_s3(competitors_data, asin)
+        st.session_state['csv_download_link'] = download_link
+
     # CPI Score Polar Plot
     competitor_prices = np.array(prices)
     cpi_score = calculate_cpi_score(target_price, competitor_prices)
@@ -1238,11 +1280,11 @@ def run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_ma
 
     # Check if we should perform time-series analysis (only if brand == 'napqueen' and dates are provided)
     if target_brand.upper() == "NAPQUEEN" and start_date and end_date:
-        perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords, non_compulsory_keywords)
+        perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords, non_compulsory_keywords, generate_csv=generate_csv_option)
         calculate_and_plot_cpi(merged_data_df, price_data_df, [asin], start_date, end_date, price_min, price_max, compulsory_features, same_brand_option)
     else:
         # Perform scatter plot only
-        perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords, non_compulsory_keywords)
+        perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, df_recent, compulsory_keywords, non_compulsory_keywords, generate_csv=generate_csv_option)
 
 
 # Load data globally before starting the Streamlit app
@@ -1298,6 +1340,8 @@ with col3:
 
 # Target price input
 target_price = st.number_input("Target Price", value=0.00)
+
+generate_csv_option = st.checkbox("Generate CSV file for download")
 
 # Checkbox for including time-series analysis, placed directly after Target Price
 include_dates = st.checkbox("Include Dates for Time-Series Analysis", value=True)
@@ -1471,3 +1515,6 @@ if 'same_brand_option' not in st.session_state:
 
 if st.button("Analyze"):
     run_analysis_button(merged_data_df, price_data_df, asin, price_min, price_max, target_price, start_date, end_date, same_brand_option, compulsory_features)
+# Display CSV download link if available
+if 'csv_download_link' in st.session_state:
+    st.markdown(f"[Download Competitor Analysis CSV]({st.session_state['csv_download_link']})")

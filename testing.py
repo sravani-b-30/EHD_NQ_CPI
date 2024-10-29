@@ -777,7 +777,7 @@ def upload_competitor_data_to_s3(competitors_data, asin):
 
 def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_features, same_brand_option, merged_data_df, compulsory_keywords, non_compulsory_keywords, generate_csv=False):
     # Find similar products
-    similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords)
+    similar_products = find_similar_products(asin, price_min, price_max, merged_data_df, compulsory_features, same_brand_option, compulsory_keywords, non_compulsory_keywords)
 
     # Retrieve target product information
     target_product = merged_data_df[merged_data_df['ASIN'] == asin].iloc[0]
@@ -793,7 +793,9 @@ def perform_scatter_plot(asin, target_price, price_min, price_max, compulsory_fe
     
     target_product_entry = (
         asin, target_product['product_title'], target_price, weighted_score, details_score,
-        title_score, desc_score, target_details, details_comparison, title_comparison, desc_comparison
+        title_score, desc_score, target_details, details_comparison, title_comparison, desc_comparison, target_product['brand'],
+        {feature: target_details.get(feature, "N/A") for feature in compulsory_features}
+
     )
 
     # Ensure the target product is not included in the similar products list
